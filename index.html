@@ -350,7 +350,38 @@ async function loadLockWallpaper(){
     $('#lock').style.backgroundImage='';
   }
 }
+let myAvatarUrl='';
 
+async function loadMyAvatar(){
+  const items=await mediaAll();
+  const item=items.find(x=>x.id==='my-avatar');
+
+  if(myAvatarUrl){
+    URL.revokeObjectURL(myAvatarUrl);
+    myAvatarUrl='';
+  }
+
+  if(item){
+    myAvatarUrl=URL.createObjectURL(item.blob);
+  }
+
+  renderMyAvatar();
+}
+
+function renderMyAvatar(){
+  $$('.msg.mine .avatar').forEach(el=>{
+    el.replaceChildren();
+
+    if(myAvatarUrl){
+      const img=document.createElement('img');
+      img.src=myAvatarUrl;
+      img.alt='我的头像';
+      el.append(img);
+    }else{
+      el.textContent='我';
+    }
+  });
+}
 function setupLockWallpaper(){
   const input=$('#lockWallpaperInput');
   const preview=$('#lockWallpaperPreview');
@@ -504,7 +535,7 @@ other.value=custom.other||getComputedStyle(document.documentElement).getProperty
   const sayings=['今天也想听你说说话。','有一件小事，想第一个告诉你。','你来啦，我一直在这里。','希望你今天有一些开心的瞬间。','记得吃饭，也记得来看看我。','平常的一天，也想和你一起度过。','有什么心事，可以告诉我。'];
 function daily(){if(data.today!==day()||!data.todayText){let n=[...day()].reduce((a,c)=>a+c.charCodeAt(0),0);data.today=day();data.todayText=sayings[n%sayings.length];save()}return data.todayText}
 function clock(){$('#lockTime').textContent=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false});$('#lockDate').textContent=new Date().toLocaleDateString('zh-CN',{dateStyle:'full'});$('#lockQuote').textContent=daily()}
-const apps=[['chat','消息','✉'],['moments','朋友圈','✿'],['album','相册','▧'],['calls','通话','☎'],['music','音乐','♫'],['notes','备忘','✎'],['profile','名片','♡'],['memory','记忆','◈'],['persona','人设卡','♧'],['world','世界书','◉'],['api','接口','⚙'],['backup','备份','▣'],['settings','设置','☷']];
+const apps=[['chat','消息','✉'],['moments','朋友圈','✿'],['album','相册','▧'],['calls','通话','☎'],['music','音乐','♫'],['notes','备忘','✎'],['profile','名片','♡'],['personal','个人资料','♙'],['memory','记忆','◈'],['persona','人设卡','♧'],['world','世界书','◉'],['api','接口','⚙'],['backup','备份','▣'],['settings','设置','☷']];
 function home(){$('#homeTitle').textContent=name()+'的小手机';$('#daily').textContent='今天想对你说：'+daily();$('#daily').onclick=()=>show('chat');$('#footer').textContent=data.settings.footer;let box=$('#icons');box.replaceChildren();for(let [id,label,sym] of apps){let b=node('button','appicon');b.append(node('i','',sym),node('span','',label));b.onclick=()=>show(id);box.append(b)}}
 $('#lock').onclick=()=>show('home');$('#lock').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show('home')}};
 /* 五、聊天：本地关键词 / 网络接口、记忆、世界书、上下文和摘要。 */
