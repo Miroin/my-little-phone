@@ -336,12 +336,13 @@ const saveBtn=$('#saveBeautyColors');
 
   if(!bg||!main||!card||!saveBtn)return;
 
-  const custom=data.settings.customColors||{};
+const custom=data.settings.customColors||{};
 
-  bg.value=custom.bg||getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
-  main.value=custom.main||getComputedStyle(document.documentElement).getPropertyValue('--main').trim();
-  card.value=custom.card||getComputedStyle(document.documentElement).getPropertyValue('--card').trim();
-
+bg.value=custom.bg||getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+main.value=custom.main||getComputedStyle(document.documentElement).getPropertyValue('--main').trim();
+card.value=custom.card||getComputedStyle(document.documentElement).getPropertyValue('--card').trim();
+mine.value=custom.mine||getComputedStyle(document.documentElement).getPropertyValue('--mine').trim();
+other.value=custom.other||getComputedStyle(document.documentElement).getPropertyValue('--other').trim();
   function preview(){
     document.documentElement.style.setProperty('--bg',bg.value);
     document.documentElement.style.setProperty('--main',main.value);
