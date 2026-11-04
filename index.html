@@ -343,12 +343,13 @@ main.value=custom.main||getComputedStyle(document.documentElement).getPropertyVa
 card.value=custom.card||getComputedStyle(document.documentElement).getPropertyValue('--card').trim();
 mine.value=custom.mine||getComputedStyle(document.documentElement).getPropertyValue('--mine').trim();
 other.value=custom.other||getComputedStyle(document.documentElement).getPropertyValue('--other').trim();
-  function preview(){
-    document.documentElement.style.setProperty('--bg',bg.value);
-    document.documentElement.style.setProperty('--main',main.value);
-    document.documentElement.style.setProperty('--card',card.value);
-  }
-
+ function preview(){
+  document.documentElement.style.setProperty('--bg',bg.value);
+  document.documentElement.style.setProperty('--main',main.value);
+  document.documentElement.style.setProperty('--card',card.value);
+  document.documentElement.style.setProperty('--mine',mine.value);
+  document.documentElement.style.setProperty('--other',other.value);
+}
   [bg,main,card].forEach(input=>{
     input.oninput=preview;
   });
