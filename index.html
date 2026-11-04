@@ -308,7 +308,7 @@ function theme(){
     .forEach((key,i)=>document.documentElement.style.setProperty('--'+key,v[i]));
 
   const custom=data.settings.customColors||{};
-  ['bg','main','card'].forEach(key=>{
+['bg','main','card','mine','other'].forEach(key=>{
     if(custom[key]){
       document.documentElement.style.setProperty('--'+key,custom[key]);
     }
