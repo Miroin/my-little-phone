@@ -756,5 +756,17 @@ $('#backupIn').onclick=()=>$('#backupInput').click();$('#backupInput').onchange=
 $('#erase').onclick=async()=>{if(!confirm('第一次确认：真的清除这台小手机的全部数据？'))return;if(prompt('第二次确认：输入“清空全部”')!=='清空全部')return;if(!await mediaClear()){alert('清除媒体库失败，请检查浏览器权限。');return}player.pause();player.removeAttribute('src');loaded='';forgetUrls();data=copy(DEF);save();theme();home();stats();alert('已经清空此浏览器的小手机资料')};
 /* 十六、主动消息：网页关闭后无法后台运行；跨天再打开时补发。 */
 function proactiveMessage(){let today=day();if(data.lastOpen&&data.lastOpen!==today&&data.settings.proactive)data.messages.push({id:uid(),role:'assistant',text:'今天又想找你聊聊天。你过得怎么样？',at:Date.now()});else if(!data.messages.length&&data.persona.first)data.messages.push({id:uid(),role:'assistant',text:data.persona.first,at:Date.now()});data.lastOpen=today;save()}
-try{theme();clock();loadLockWallpaper();proactiveMessage();home();setInterval(clock,30000)}catch(e){console.error('初始化失败',e);alert('部分功能初始化失败，可尝试重新打开或恢复备份。')}
+try{
+  theme();
+  clock();
+  loadLockWallpaper();
+  loadMyAvatar();
+  loadYanAvatar();
+  proactiveMessage();
+  home();
+  setInterval(clock,30000);
+}catch(e){
+  console.error('初始化失败',e);
+  alert('部分功能初始化失败，可尝试重新打开或恢复备份。');
+}catch(e){console.error('初始化失败',e);alert('部分功能初始化失败，可尝试重新打开或恢复备份。')}
 </script></body></html>
