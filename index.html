@@ -810,7 +810,9 @@ if(yanAvatarUrl){
 }else{
   $('#callAvatar').textContent=avatar();
 }
-
+$('#chatCall').onclick=()=>{
+  show('calls');
+};
 $('#callName').textContent=name();let box=$('#callList');box.replaceChildren();if(!data.calls.length)box.append(node('div','empty','暂无通话记录'));for(let c of data.calls)box.append(node('div','card',date(c.at)+'　'+format(c.seconds)))}$('#connect').onclick=()=>{if(callTimer)return;callStart=Date.now();$('#callStatus').textContent='通话中';callTimer=setInterval(()=>$('#callClock').textContent=format((Date.now()-callStart)/1000),300)};$('#hangup').onclick=()=>{if(!callTimer)return;clearInterval(callTimer);callTimer=null;let n=Math.floor((Date.now()-callStart)/1000);data.calls.unshift({id:uid(),at:callStart,seconds:n});save();$('#callClock').textContent=format(n);$('#callStatus').textContent='通话结束';calls()};
 /* 九、音频导入、上一首下一首、播放暂停与进度拖动。 */
 let tracks=[],trackIndex=0,loaded='',player=$('#audio');$('#addMusic').onclick=()=>$('#musicInput').click();$('#musicInput').onchange=async e=>{for(let f of e.target.files){if(f.type.startsWith('audio/')||/\.(mp3|m4a|aac|wav|ogg|flac)$/i.test(f.name))await mediaWrite({id:uid(),kind:'music',name:f.name,at:Date.now(),blob:f})}e.target.value='';songs()};
