@@ -291,7 +291,19 @@ async function mediaClear(){try{let d=await db();await new Promise((ok,bad)=>{le
 let media=[],urls={};async function refresh(){media=await mediaAll()};function objectUrl(item){if(!urls[item.id])urls[item.id]=URL.createObjectURL(item.blob);return urls[item.id]};function forgetUrls(){for(let u of Object.values(urls))URL.revokeObjectURL(u);urls={}}
 /* 四、桌面、主题和每天固定的一句话。 */
 const colors={pink:['#f9e5f0','#9675b5','#514b56','#4e4a50','#fff9fc','#eddaee','#dbcede','#8b8290','#e8d9f4','#fff','#ab5365'],lavender:['#efe7fc','#8065b1','#4b455a','#54445c','#fcf9ff','#ddd0f2','#d6c6e8','#887c99','#e3d8fa','#fff','#aa546a'],cream:['#fff0e3','#b38799','#605458','#595054','#fffaf5','#f5e0d2','#e9d2c9','#98858a','#f3d9dc','#fff','#a95667'],dark:['#272334','#d0b4ef','#eee5f4','#74637b','#383144','#4c405c','#5b4e68','#b0a2bc','#675578','#453b50','#ad506b']};
-function theme(){let v=colors[data.settings.theme]||colors.pink;['bg','main','ink','accent','card','soft','line','muted','mine','other','danger'].forEach((key,i)=>document.documentElement.style.setProperty('--'+key,v[i]))}
+function theme(){
+  let v=colors[data.settings.theme]||colors.pink;
+
+  ['bg','main','ink','accent','card','soft','line','muted','mine','other','danger']
+    .forEach((key,i)=>document.documentElement.style.setProperty('--'+key,v[i]));
+
+  const custom=data.settings.customColors||{};
+  ['bg','main','card'].forEach(key=>{
+    if(custom[key]){
+      document.documentElement.style.setProperty('--'+key,custom[key]);
+    }
+  });
+}
 function applyBeautyTheme(key){
   if(!colors[key])return;
   data.settings.theme=key;
