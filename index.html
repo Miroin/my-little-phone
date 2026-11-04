@@ -355,7 +355,10 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
 'use strict';
 /* 二、文字放 localStorage。读取失败时给出默认值而不让整页崩溃。 */
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
-const DEF={messages:[],memories:[],notes:[],moments:[],calls:[],world:[],summary:'',summaryIndex:0,lastOpen:'',today:'',todayText:'',persona:{name:'',callme:'',personality:'',catchphrase:'',taboo:'',first:'',extra:'',birthday:'',zodiac:'',hobbies:'',signature:''},api:{mode:'local',url:'',model:'',key:'',temperature:.8},settings:{name:'',footer:'有些话，只想说给你听。',theme:'pink',context:12,summarize:true,max:80,proactive:true}};
+const DEF={messages:[],memories:[],notes:[],moments:[],calls:[],world:[],summary:'',summaryIndex:0,lastOpen:'',today:'',todayText:'',persona:{name:'',callme:'',personality:'',catchphrase:'',taboo:'',first:'',extra:'',birthday:'',zodiac:'',hobbies:'',signature:''},api:{mode:'local',url:'',model:'',key:'',temperature:.8},
+settings:{name:'',footer:'有些话，只想说给你听。',theme:'pink',context:12,summarize:true,max:80,proactive:true},
+myProfile:{name:'我',signature:'',id:'',categories:{}},
+yanProfile:{name:'沈砚',signature:'',id:'',categories:{}}
 const copy=x=>JSON.parse(JSON.stringify(x));let old={};try{old=JSON.parse(localStorage.getItem('rp_phone_all_v2'))||{}}catch(e){console.warn(e)}
 let data={...copy(DEF),...old,persona:{...DEF.persona,...(old.persona||{})},api:{...DEF.api,...(old.api||{})},settings:{...DEF.settings,...(old.settings||{})}};for(let k of ['messages','memories','notes','moments','calls','world'])if(!Array.isArray(data[k]))data[k]=[];
 function save(){try{localStorage.setItem('rp_phone_all_v2',JSON.stringify(data));return true}catch(e){alert('文字保存失败，可能已满或处于受限浏览模式。请导出备份。');return false}}
