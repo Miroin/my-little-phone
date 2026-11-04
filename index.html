@@ -438,10 +438,13 @@ function applyBeautyTheme(key){
   save();
   theme();
 }
-  function beauty(){
+function beauty(){
   $$('#beauty [data-theme]').forEach(b=>{
     b.onclick=()=>applyBeautyTheme(b.dataset.theme);
   });
+
+  setupLockWallpaper();
+  loadLockWallpaper();
 }
   function initBeautyColors(){
 const bg=$('#beautyBg');
