@@ -531,6 +531,33 @@ function beauty(){
   setupLockWallpaper();
   loadLockWallpaper();
 }
+
+  let personalTarget='my';
+
+function personal(){
+  const my=$('#myPersonalCard');
+  const yan=$('#yanPersonalCard');
+
+  function switchTab(target){
+    personalTarget=target;
+    my.hidden=target!=='my';
+    yan.hidden=target!=='yan';
+
+    $('#myPersonalTab').classList.toggle('alt',target!=='my');
+    $('#yanPersonalTab').classList.toggle('alt',target!=='yan');
+  }
+
+  $('#myPersonalTab').onclick=()=>switchTab('my');
+  $('#yanPersonalTab').onclick=()=>switchTab('yan');
+
+  $('#myPersonalName').textContent=data.myProfile.name||'我';
+  $('#myPersonalSignature').textContent=data.myProfile.signature||'填写你的个性签名';
+
+  $('#yanPersonalName').textContent=data.yanProfile.name||'沈砚';
+  $('#yanPersonalSignature').textContent=data.yanProfile.signature||'角色个性签名';
+
+  switchTab(personalTarget);
+}
   function initBeautyColors(){
 const bg=$('#beautyBg');
 const main=$('#beautyMain');
