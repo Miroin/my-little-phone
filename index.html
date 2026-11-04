@@ -417,6 +417,21 @@ async function loadMyAvatar(){
 }
 
 function renderMyAvatar(){
+  const card=$('#myPersonalAvatar');
+
+  if(card){
+    card.replaceChildren();
+
+    if(myAvatarUrl){
+      const img=document.createElement('img');
+      img.src=myAvatarUrl;
+      img.alt='我的头像';
+      card.append(img);
+    }else{
+      card.textContent='我';
+    }
+  }
+
   $$('.msg.mine .avatar').forEach(el=>{
     el.replaceChildren();
 
@@ -429,7 +444,8 @@ function renderMyAvatar(){
       el.textContent='我';
     }
   });
-}let yanAvatarUrl='';
+}
+  let yanAvatarUrl='';
 
 async function loadYanAvatar(){
   const items=await mediaAll();
