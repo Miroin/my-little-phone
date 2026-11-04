@@ -555,6 +555,35 @@ function personal(){
 
   $('#yanPersonalName').textContent=data.yanProfile.name||'沈砚';
   $('#yanPersonalSignature').textContent=data.yanProfile.signature||'角色个性签名';
+  const myCategories=[
+  '基本资料','喜欢的事物','不喜欢的事物',
+  '生活习惯','重要记忆','身体与周期','其他备注'
+];
+
+const yanCategories=[
+  '性格特征','行为习惯','喜欢的事物',
+  '讨厌的事物','说话风格','与你的关系',
+  '重要记忆','其他特征'
+];
+
+function renderCategories(target,items){
+  const box=target==='my'
+    ?$('#myPersonalCategories')
+    :$('#yanPersonalCategories');
+
+  box.replaceChildren();
+
+  items.forEach(title=>{
+    const card=node('div','card');
+    card.append(node('h3','',title));
+    const content=data[target==='my'?'myProfile':'yanProfile'].categories||{};
+    card.append(node('p','muted',content[title]||'暂未填写'));
+    box.append(card);
+  });
+}
+
+renderCategories('my',myCategories);
+renderCategories('yan',yanCategories);
 
   switchTab(personalTarget);
 }
