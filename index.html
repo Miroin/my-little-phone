@@ -701,6 +701,17 @@ function renderCategories(target,items){
 renderCategories('my',myCategories);
 renderCategories('yan',yanCategories);
 
+  $('#myPersonalAvatar').onclick=()=>{
+  choosePersonalAvatar('my');
+};
+
+$('#yanPersonalAvatar').onclick=()=>{
+  choosePersonalAvatar('yan');
+};
+
+loadMyAvatar();
+loadYanAvatar();
+  
   switchTab(personalTarget);
 }
   function initBeautyColors(){
