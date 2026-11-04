@@ -2,7 +2,53 @@
 <html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>角色的小手机</title>
 <style>
 /* 一、所有主题颜色都放在最上方。 */
-:root{--bg:#f9e5f0;--main:#9675b5;--ink:#514b56;--accent:#4e4a50;--card:#fff9fc;--soft:#eddaee;--line:#dbcede;--muted:#8b8290;--mine:#e8d9f4;--other:#ffffff;--danger:#ab5365}
+:root{
+  /* 粉紫梦幻主色 */
+  --bg:#f7effa;
+  --main:#a783c8;
+  --main-light:#c9addf;
+  --main-dark:#80609f;
+
+  /* 文字 */
+  --ink:#51445e;
+  --accent:#765d83;
+  --muted:#9b8da5;
+
+  /* 卡片与背景 */
+  --card:#fffaff;
+  --soft:#f0e3f5;
+  --line:#e5d6eb;
+
+  /* 聊天气泡 */
+  --mine:#eadcf5;
+  --other:#ffffff;
+
+  /* 状态颜色 */
+  --danger:#c47791;
+  --success:#8eaf9b;
+
+  /* 圆角系统 */
+  --radius-sm:12px;
+  --radius-md:18px;
+  --radius-lg:24px;
+  --radius-xl:30px;
+
+  /* 阴影系统 */
+  --shadow-soft:0 4px 16px rgba(139,104,163,.09);
+  --shadow-card:0 8px 28px rgba(139,104,163,.12);
+
+  /* 间距系统 */
+  --space-1:4px;
+  --space-2:8px;
+  --space-3:12px;
+  --space-4:16px;
+  --space-5:24px;
+  --space-6:32px;
+
+  /* 动画 */
+  --transition-fast:.2s ease;
+  --transition-normal:.3s ease;
+}
 *{box-sizing:border-box}html,body{margin:0;height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"PingFang SC",sans-serif}button,input,textarea,select{font:inherit}button{border:0;cursor:pointer}button,input,textarea,select{max-width:100%}.phone{height:100dvh;width:100%;max-width:540px;margin:auto;position:relative;overflow:hidden;background:var(--bg)}.screen{display:none;height:100%;flex-direction:column;min-height:0}.screen.active{display:flex}.head{flex:none;background:var(--card);border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center;padding:calc(9px + env(safe-area-inset-top)) 12px 9px}.head b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}.head small{display:block;color:var(--muted);font-weight:400;font-size:11px}.back{background:var(--soft);font-size:22px;width:42px;height:42px;border-radius:12px}.body{padding:14px;flex:1;overflow-x:hidden;overflow-y:auto;min-height:0}.card{border:1px solid var(--line);background:var(--card);border-radius:17px;padding:14px;margin:0 0 12px;overflow-wrap:anywhere}.btn{border-radius:11px;padding:10px 14px;background:var(--accent);color:white;min-height:42px}.btn.alt{background:var(--soft);color:var(--ink)}.btn.danger{background:var(--danger)}.small{padding:7px 10px;min-height:35px;font-size:12px}.row{display:flex;gap:8px;align-items:center}.grow{flex:1;min-width:0}.actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.muted{font-size:12px;color:var(--muted)}.field{margin:0 0 13px}.field label{display:block;color:var(--main);font-weight:600;font-size:13px;margin-bottom:5px}.field input:not([type=checkbox]),.field textarea,.field select{width:100%;padding:11px;background:var(--card);border:1px solid var(--line);border-radius:10px;color:var(--ink)}textarea{min-height:75px;resize:vertical}input[type=range]{width:100%;accent-color:var(--main)}.avatar{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--soft);color:var(--main);font-weight:bold;flex:none}.big{width:94px;height:94px;font-size:42px;margin:10px auto}.empty{padding:35px 10px;text-align:center;color:var(--muted)}p{white-space:pre-wrap;overflow-wrap:anywhere}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}#lock{justify-content:center;align-items:center;text-align:center;background:linear-gradient(var(--soft),var(--bg));cursor:pointer}#lockTime{font-size:76px;color:var(--main);font-weight:250}#lockQuote{margin:35px 25px;color:var(--main)}#home{background:linear-gradient(var(--bg),var(--soft))}.welcome{padding:calc(28px + env(safe-area-inset-top)) 20px 10px;text-align:center}.welcome h2{color:var(--main)}#daily{background:var(--card);padding:13px;border-radius:16px}.icons{padding:19px 12px;flex:1;overflow-y:auto;align-content:start;gap:21px 8px}.appicon{background:transparent;display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--ink);font-size:12px}.appicon i{font-style:normal;background:var(--card);border:1px solid var(--line);width:59px;height:59px;border-radius:18px;display:grid;place-items:center;color:var(--main);font-size:28px}#footer{text-align:center;font-size:12px;color:var(--muted);padding:12px 4px calc(12px + env(safe-area-inset-bottom))}#chatList{display:flex;flex-direction:column;gap:11px}.msg{display:flex;align-items:end;gap:7px;max-width:94%}.msg.mine{align-self:end;flex-direction:row-reverse}.msg .avatar{width:29px;height:29px;font-size:12px}.bubble{background:var(--other);border-radius:15px;padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere}.mine .bubble{background:var(--mine)}.time{font-size:10px;color:var(--muted)}#typing{display:none;color:var(--main);padding:5px 18px}#typing.on{display:block}.composer{display:flex;gap:8px;padding:8px 9px calc(8px + env(safe-area-inset-bottom));background:var(--card)}.composer textarea{flex:1;min-width:0;min-height:43px;height:45px}.photos button{aspect-ratio:1;padding:0;background:var(--soft);border-radius:10px;overflow:hidden}.photos img{width:100%;height:100%;object-fit:cover}.preview{display:none;position:absolute;inset:0;z-index:10;background:#1e1924ef;align-items:center;justify-content:center;flex-direction:column;padding:15px}.preview.open{display:flex}.preview img{max-height:75%;max-width:100%;object-fit:contain}.postpic{max-width:100%;max-height:270px;object-fit:contain}.switch{display:flex;align-items:center;justify-content:space-between}.center{text-align:center}
 </style></head><body><div class="phone">
 <section class="screen active" id="lock" tabindex="0"><div id="lockTime">00:00</div><div id="lockDate"></div><div id="lockQuote"></div><div class="muted">轻点屏幕解锁 ♡</div></section>
