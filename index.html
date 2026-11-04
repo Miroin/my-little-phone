@@ -429,6 +429,52 @@ function renderMyAvatar(){
       el.textContent='我';
     }
   });
+}let yanAvatarUrl='';
+
+async function loadYanAvatar(){
+  const items=await mediaAll();
+  const item=items.find(x=>x.id==='yan-avatar');
+
+  if(yanAvatarUrl){
+    URL.revokeObjectURL(yanAvatarUrl);
+    yanAvatarUrl='';
+  }
+
+  if(item){
+    yanAvatarUrl=URL.createObjectURL(item.blob);
+  }
+
+  renderYanAvatar();
+}
+
+function renderYanAvatar(){
+  const card=$('#yanPersonalAvatar');
+
+  if(card){
+    card.replaceChildren();
+
+    if(yanAvatarUrl){
+      const img=document.createElement('img');
+      img.src=yanAvatarUrl;
+      img.alt='沈砚的头像';
+      card.append(img);
+    }else{
+      card.textContent='♡';
+    }
+  }
+
+  $$('.msg:not(.mine) .avatar').forEach(el=>{
+    el.replaceChildren();
+
+    if(yanAvatarUrl){
+      const img=document.createElement('img');
+      img.src=yanAvatarUrl;
+      img.alt='沈砚的头像';
+      el.append(img);
+    }else{
+      el.textContent=avatar();
+    }
+  });
 }
 function setupLockWallpaper(){
   const input=$('#lockWallpaperInput');
