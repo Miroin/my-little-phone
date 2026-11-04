@@ -350,10 +350,9 @@ other.value=custom.other||getComputedStyle(document.documentElement).getProperty
   document.documentElement.style.setProperty('--mine',mine.value);
   document.documentElement.style.setProperty('--other',other.value);
 }
-  [bg,main,card].forEach(input=>{
-    input.oninput=preview;
-  });
-
+  [bg,main,card,mine,other].forEach(input=>{
+  input.oninput=preview;
+});
  saveBtn.onclick=()=>{
   data.settings.customColors={
     bg:bg.value,
