@@ -573,11 +573,30 @@ function renderCategories(target,items){
 
   box.replaceChildren();
 
+  const profile=target==='my'
+    ?data.myProfile
+    :data.yanProfile;
+
+  if(!profile.categories)profile.categories={};
+
   items.forEach(title=>{
     const card=node('div','card');
+    const content=profile.categories[title]||'';
+
     card.append(node('h3','',title));
-    const content=data[target==='my'?'myProfile':'yanProfile'].categories||{};
-    card.append(node('p','muted',content[title]||'暂未填写'));
+    card.append(node('p','muted',content||'暂未填写'));
+
+    const edit=node('button','btn alt','编辑');
+    edit.onclick=()=>{
+      const value=prompt('编辑「'+title+'」的内容：',content);
+      if(value===null)return;
+
+      profile.categories[title]=value.trim();
+      save();
+      renderCategories(target,items);
+    };
+
+    card.append(edit);
     box.append(card);
   });
 }
