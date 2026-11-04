@@ -354,15 +354,17 @@ other.value=custom.other||getComputedStyle(document.documentElement).getProperty
     input.oninput=preview;
   });
 
-  saveBtn.onclick=()=>{
-    data.settings.customColors={
-      bg:bg.value,
-      main:main.value,
-      card:card.value
-    };
-    save();
-    alert('自定义配色已保存！');
+ saveBtn.onclick=()=>{
+  data.settings.customColors={
+    bg:bg.value,
+    main:main.value,
+    card:card.value,
+    mine:mine.value,
+    other:other.value
   };
+  save();
+  alert('自定义配色已保存！');
+};
 }
   const sayings=['今天也想听你说说话。','有一件小事，想第一个告诉你。','你来啦，我一直在这里。','希望你今天有一些开心的瞬间。','记得吃饭，也记得来看看我。','平常的一天，也想和你一起度过。','有什么心事，可以告诉我。'];
 function daily(){if(data.today!==day()||!data.todayText){let n=[...day()].reduce((a,c)=>a+c.charCodeAt(0),0);data.today=day();data.todayText=sayings[n%sayings.length];save()}return data.todayText}
