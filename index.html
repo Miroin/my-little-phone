@@ -115,9 +115,25 @@ textarea{min-height:75px;resize:vertical}
 input[type=range]{width:100%;accent-color:var(--main)}
 
 .avatar{
-  display:grid;place-items:center;width:38px;height:38px;
-  border-radius:50%;background:var(--soft);color:var(--main-dark);
-  font-weight:bold;flex:none;border:1px solid var(--line)
+  display:grid;
+  place-items:center;
+  width:38px;
+  height:38px;
+  border-radius:50%;
+  background:var(--soft);
+  color:var(--main-dark);
+  font-weight:bold;
+  flex:none;
+  border:1px solid var(--line);
+  overflow:hidden;
+}
+
+.avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  border-radius:50%;
+  display:block;
 }
 .big{width:94px;height:94px;font-size:42px;margin:10px auto}
 .empty{padding:35px 10px;text-align:center;color:var(--muted)}
