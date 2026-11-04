@@ -304,6 +304,40 @@ function applyBeautyTheme(key){
     b.onclick=()=>applyBeautyTheme(b.dataset.theme);
   });
 }
+  function initBeautyColors(){
+  const bg=$('#beautyBg');
+  const main=$('#beautyMain');
+  const card=$('#beautyCard');
+  const saveBtn=$('#saveBeautyColors');
+
+  if(!bg||!main||!card||!saveBtn)return;
+
+  const custom=data.settings.customColors||{};
+
+  bg.value=custom.bg||getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  main.value=custom.main||getComputedStyle(document.documentElement).getPropertyValue('--main').trim();
+  card.value=custom.card||getComputedStyle(document.documentElement).getPropertyValue('--card').trim();
+
+  function preview(){
+    document.documentElement.style.setProperty('--bg',bg.value);
+    document.documentElement.style.setProperty('--main',main.value);
+    document.documentElement.style.setProperty('--card',card.value);
+  }
+
+  [bg,main,card].forEach(input=>{
+    input.oninput=preview;
+  });
+
+  saveBtn.onclick=()=>{
+    data.settings.customColors={
+      bg:bg.value,
+      main:main.value,
+      card:card.value
+    };
+    save();
+    alert('自定义配色已保存！');
+  };
+}
   const sayings=['今天也想听你说说话。','有一件小事，想第一个告诉你。','你来啦，我一直在这里。','希望你今天有一些开心的瞬间。','记得吃饭，也记得来看看我。','平常的一天，也想和你一起度过。','有什么心事，可以告诉我。'];
 function daily(){if(data.today!==day()||!data.todayText){let n=[...day()].reduce((a,c)=>a+c.charCodeAt(0),0);data.today=day();data.todayText=sayings[n%sayings.length];save()}return data.todayText}
 function clock(){$('#lockTime').textContent=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false});$('#lockDate').textContent=new Date().toLocaleDateString('zh-CN',{dateStyle:'full'});$('#lockQuote').textContent=daily()}
