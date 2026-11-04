@@ -317,6 +317,7 @@ function theme(){
 function applyBeautyTheme(key){
   if(!colors[key])return;
   data.settings.theme=key;
+  data.settings.customColors={};
   $('#theme').value=key;
   save();
   theme();
