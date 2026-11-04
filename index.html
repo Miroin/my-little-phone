@@ -468,22 +468,16 @@ async function loadYanAvatar(){
 }
 
 function renderYanAvatar(){
-  const card=$('#yanPersonalAvatar');
+  const targets=[
+    $('#yanPersonalAvatar'),
+    $('#chatAvatar'),
+    ...$$('.msg:not(.mine) .avatar'),
+    $('#callAvatar')
+  ];
 
-  if(card){
-    card.replaceChildren();
+  targets.forEach(el=>{
+    if(!el)return;
 
-    if(yanAvatarUrl){
-      const img=document.createElement('img');
-      img.src=yanAvatarUrl;
-      img.alt='沈砚的头像';
-      card.append(img);
-    }else{
-      card.textContent='♡';
-    }
-  }
-
-  $$('.msg:not(.mine) .avatar').forEach(el=>{
     el.replaceChildren();
 
     if(yanAvatarUrl){
@@ -495,82 +489,6 @@ function renderYanAvatar(){
       el.textContent=avatar();
     }
   });
-}
-function setupLockWallpaper(){
-  const input=$('#lockWallpaperInput');
-  const preview=$('#lockWallpaperPreview');
-  const saveBtn=$('#saveLockWallpaper');
-  const resetBtn=$('#resetLockWallpaper');
-
-  if(!input||!preview||!saveBtn||!resetBtn)return;
-
-  let selectedBlob=null;
-  let previewUrl='';
-
-  input.onchange=()=>{
-    const file=input.files[0];
-    if(!file)return;
-
-    if(!file.type.startsWith('image/')){
-      alert('请选择图片文件');
-      return;
-    }
-
-    selectedBlob=file;
-    if(previewUrl)URL.revokeObjectURL(previewUrl);
-    previewUrl=URL.createObjectURL(file);
-
-    preview.innerHTML='';
-    const img=document.createElement('img');
-    img.src=previewUrl;
-    img.style.cssText='width:100%;max-height:220px;object-fit:cover;border-radius:16px';
-    preview.append(img);
-  };
-
-  saveBtn.onclick=async()=>{
-    if(!selectedBlob){
-      alert('请先选择一张图片');
-      return;
-    }
-
-    const ok=await mediaWrite({
-      id:'lock-wallpaper',
-      kind:'wallpaper',
-      name:'锁屏壁纸',
-      at:Date.now(),
-      blob:selectedBlob
-    });
-
-    if(ok){
-      await loadLockWallpaper();
-      alert('锁屏壁纸已保存！');
-    }
-  };
-
-  resetBtn.onclick=async()=>{
-    if(!confirm('确定恢复默认锁屏壁纸吗？'))return;
-
-    const items=await mediaAll();
-    const old=items.find(x=>x.id==='lock-wallpaper');
-
-    if(old){
-      let d=await db();
-      await new Promise((ok,bad)=>{
-        let t=d.transaction('files','readwrite');
-        t.objectStore('files').delete('lock-wallpaper');
-        t.oncomplete=ok;
-        t.onerror=()=>bad(t.error);
-      });
-    }
-
-    if(lockWallpaperUrl)URL.revokeObjectURL(lockWallpaperUrl);
-    lockWallpaperUrl='';
-    $('#lock').style.backgroundImage='';
-    preview.innerHTML='';
-    input.value='';
-    selectedBlob=null;
-    alert('已恢复默认壁纸');
-  };
 }
 async function mediaWrite(v){try{let d=await db();await new Promise((ok,bad)=>{let t=d.transaction('files','readwrite');t.objectStore('files').put(v);t.oncomplete=ok;t.onerror=()=>bad(t.error)});return true}catch(e){alert('媒体保存失败：'+e.message);return false}}
 async function mediaDelete(id){try{let d=await db();await new Promise((ok,bad)=>{let t=d.transaction('files','readwrite');t.objectStore('files').delete(id);t.oncomplete=ok;t.onerror=()=>bad(t.error)});return true}catch(e){return false}}
