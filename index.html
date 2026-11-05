@@ -767,7 +767,23 @@ function profile(){let p=data.persona,b=$('#profileContent');b.replaceChildren()
 function editWorld(w){let title=prompt('条目标题',w?.title||'');if(!title?.trim())return;let keys=prompt('关键词（多个用逗号分隔）',w?.keys||'');if(keys===null)return;let text=prompt('设定内容',w?.text||'');if(!text?.trim())return;let always=confirm('确定=常驻；取消=命中关键词才触发');if(w)Object.assign(w,{title:title.trim(),keys,text:text.trim(),always});else data.world.push({id:uid(),title:title.trim(),keys,text:text.trim(),always});save();world()}
 function world(){let b=$('#worldList');b.replaceChildren();if(!data.world.length)b.append(node('div','empty','世界书为空'));for(let w of data.world){let c=node('div','card');c.append(node('b','',w.title),node('div','muted',(w.always?'常驻':'关键词触发')+' · '+w.keys),node('p','',w.text));let a=node('div','actions');a.append(action('编辑',()=>editWorld(w)),action('删除',()=>{if(confirm('删除此条？')){data.world=data.world.filter(x=>x.id!==w.id);save();world()}}));c.append(a);b.append(c)}}$('#newWorld').onclick=()=>editWorld();function download(text,file){let u=URL.createObjectURL(new Blob([text],{type:'application/json'})),a=document.createElement('a');a.href=u;a.download=file;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),10000)}$('#worldExport').onclick=()=>download(JSON.stringify(data.world,null,2),'世界书_'+day()+'.json');$('#worldImport').onclick=()=>$('#worldInput').click();$('#worldInput').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let j=JSON.parse(await f.text()),list=Array.isArray(j)?j:j.entries;if(!Array.isArray(list))throw Error('JSON 应为数组或包含 entries 数组');let arr=list.map(w=>({id:uid(),title:String(w.title||w.name||'无标题'),keys:Array.isArray(w.keywords)?w.keywords.join(','):String(w.keys||w.keywords||''),text:String(w.text||w.content||''),always:!!(w.always||w.constant)})).filter(w=>w.text);if(confirm('追加 '+arr.length+' 条世界书？')){data.world.push(...arr);save();world()}}catch(err){alert('导入失败：'+err.message)}e.target.value=''};
 /* 十三、API 支持测试，保存即生效。 */
-function api(){$('#mode').value=data.api.mode;$('#endpoint').value=data.api.url;$('#model').value=data.api.model;$('#key').value=data.api.key;$('#temperature').value=data.api.temperature;$('#temperatureText').textContent=data.api.temperature}$('#temperature').oninput=e=>$('#temperatureText').textContent=e.target.value;function readApi(){data.api={mode:$('#mode').value,url:$('#endpoint').value.trim(),model:$('#model').value.trim(),key:$('#key').value,temperature:Number($('#temperature').value)};save()}$('#apiForm').onsubmit=e=>{e.preventDefault();try{if($('#endpoint').value.trim())$('#endpoint').value=normalizeUrl($('#endpoint').value);readApi();alert('已保存接口设置')}catch(ex){alert('地址不正确：'+ex.message)}};$('#test').onclick=async()=>{readApi();$('#testResult').textContent='测试中…';try{let ans=await request([{role:'user',content:'你好，请用一句话问候我。'}]);$('#testResult').textContent='连接成功！\n'+ans}catch(e){$('#testResult').textContent='测试失败：'+e.message}};
+function api(){$('#mode').value=data.api.mode;$('#endpoint').value=data.api.url;$('#model').value=data.api.model;$('#key').value=data.api.key;$('#temperature').value=data.api.temperature;$('#temperatureText').textContent=data.api.temperature}$('#temperature').oninput=e=>$('#temperatureText').textContent=e.target.value;function readApi(){
+  const key=$('#key').value;
+  try{
+    localStorage.setItem(API_KEY_STORAGE,key);
+    data.api={
+      mode:$('#mode').value,
+      url:$('#endpoint').value.trim(),
+      model:$('#model').value.trim(),
+      key:key,
+      temperature:Number($('#temperature').value)
+    };
+    save();
+  }catch(e){
+    alert('API Key 保存失败，请检查浏览器存储权限。');
+    throw e;
+  }
+}$('#apiForm').onsubmit=e=>{e.preventDefault();try{if($('#endpoint').value.trim())$('#endpoint').value=normalizeUrl($('#endpoint').value);readApi();alert('已保存接口设置')}catch(ex){alert('地址不正确：'+ex.message)}};$('#test').onclick=async()=>{readApi();$('#testResult').textContent='测试中…';try{let ans=await request([{role:'user',content:'你好，请用一句话问候我。'}]);$('#testResult').textContent='连接成功！\n'+ans}catch(e){$('#testResult').textContent='测试失败：'+e.message}};
 /* 十四、设置：名字、底部文字、主题、上下文条数、摘要和记忆上限。 */
 function settings(){let s=data.settings;$('#displayName').value=s.name;$('#footerText').value=s.footer;$('#theme').value=s.theme;$('#context').value=s.context;$('#summaryOn').checked=s.summarize;$('#memoryMax').value=s.max;$('#proactive').checked=s.proactive}$('#settingsForm').onsubmit=e=>{e.preventDefault();data.settings={name:$('#displayName').value.trim(),footer:$('#footerText').value,theme:$('#theme').value,customColors:data.settings.customColors,context:Math.max(2,Math.min(40,+$('#context').value||12)),summarize:$('#summaryOn').checked,max:Math.max(10,Math.min(500,+$('#memoryMax').value||80)),proactive:$('#proactive').checked};save();theme();home();alert('设置已保存')};
 /* 十五、备份包含文字 JSON 和 IndexedDB 的二进制媒体（base64）。 */
