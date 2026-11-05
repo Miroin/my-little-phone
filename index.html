@@ -542,7 +542,7 @@ function renderMyAvatar(){
 async function loadYanAvatar(){
   const items=await mediaAll();
   if(!items)return;
- const item=items.find(x=>x.id===(data.avatarSlots?.yan||'yan-avatar'));
+const item=items.find(x=>x.id===(data.avatarSlots?.yan||'yan-avatar'));
 
   if(yanAvatarUrl){
     URL.revokeObjectURL(yanAvatarUrl);
