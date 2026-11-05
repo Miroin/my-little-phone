@@ -470,8 +470,9 @@ async function mediaAll(){
   let lockWallpaperUrl='';
   
 async function loadLockWallpaper(){
-  const items=await mediaAll();
-  const item=items.find(x=>x.id==='lock-wallpaper');
+const items=await mediaAll();
+if(!items)return;
+const item=items.find(x=>x.id==='lock-wallpaper');
 
   if(item){
     if(lockWallpaperUrl)URL.revokeObjectURL(lockWallpaperUrl);
@@ -487,7 +488,8 @@ let myAvatarUrl='';
 
 async function loadMyAvatar(){
   const items=await mediaAll();
-  const item=items.find(x=>x.id==='my-avatar');
+if(!items)return;
+const item=items.find(x=>x.id==='my-avatar');
 
   if(myAvatarUrl){
     URL.revokeObjectURL(myAvatarUrl);
@@ -576,7 +578,7 @@ async function mediaWrite(v){try{let d=await db();await new Promise((ok,bad)=>{l
 async function mediaDelete(id){try{let d=await db();await new Promise((ok,bad)=>{let t=d.transaction('files','readwrite');t.objectStore('files').delete(id);t.oncomplete=ok;t.onerror=()=>bad(t.error)});return true}catch(e){return false}}
 async function mediaClear(){try{let d=await db();await new Promise((ok,bad)=>{let t=d.transaction('files','readwrite');t.objectStore('files').clear();t.oncomplete=ok;t.onerror=()=>bad(t.error)});return true}catch(e){return false}}
 async function choosePersonalAvatar(target){
-  await refresh();
+  if(!await refresh())return;
 
   const photos=media.filter(m=>m.kind==='photo');
 
@@ -805,10 +807,10 @@ loadYanAvatar();
 let busy=false;$('#sendForm').onsubmit=async e=>{e.preventDefault();let t=$('#message').value.trim();if(!t||busy)return;busy=true;$('#message').value='';data.messages.push({id:uid(),role:'user',text:t,at:Date.now()});detectMemory(t);condense();save();chat();$('#typing').classList.add('on');let ans='',error='',start=Date.now();try{if(data.api.mode==='api')ans=await request([{role:'system',content:promptSystem()},...lastMsgs().map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}))]);else ans=localAnswer(t)}catch(ex){error=ex.message;ans=localAnswer(t)}let rest=650-(Date.now()-start);if(rest>0)await new Promise(r=>setTimeout(r,rest));if(error)ans+='\n\n〔接口失败，已使用本地回复。原因：'+error+'〕';data.messages.push({id:uid(),role:'assistant',text:ans,at:Date.now(),fallback:!!error});save();busy=false;$('#typing').classList.remove('on');chat()};$('#message').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('#sendForm').requestSubmit()}};
 $('#clearChat').onclick=()=>{if(confirm('清空全部聊天（不清除长期记忆）？')){data.messages=[];data.summary='';data.summaryIndex=0;save();chat()}};
 /* 六、朋友圈：文本、可选相册图片、点赞、时间和删除。 */
-async function moments(){await refresh();let box=$('#momentsList');box.replaceChildren();if(!data.moments.length)box.append(node('div','empty','还没有动态'));for(let x of data.moments){let c=node('div','card'),heading=node('div','row');heading.append(node('div','avatar',avatar()),node('b','',name()));c.append(heading,node('p','',x.text),node('div','time',date(x.at)));let pic=media.find(m=>m.id===x.photo);if(pic){let im=node('img','postpic');im.src=objectUrl(pic);c.append(im)}let a=node('div','actions');a.append(action(x.liked?'♥ 已赞':'♡ 点赞',()=>{x.liked=!x.liked;save();moments()}),action('删除',()=>{if(confirm('删除动态？')){data.moments=data.moments.filter(m=>m.id!==x.id);save();moments()}}));c.append(a);box.append(c)}}
+async function moments(){ if(!await refresh())return;let box=$('#momentsList');box.replaceChildren();if(!data.moments.length)box.append(node('div','empty','还没有动态'));for(let x of data.moments){let c=node('div','card'),heading=node('div','row');heading.append(node('div','avatar',avatar()),node('b','',name()));c.append(heading,node('p','',x.text),node('div','time',date(x.at)));let pic=media.find(m=>m.id===x.photo);if(pic){let im=node('img','postpic');im.src=objectUrl(pic);c.append(im)}let a=node('div','actions');a.append(action(x.liked?'♥ 已赞':'♡ 点赞',()=>{x.liked=!x.liked;save();moments()}),action('删除',()=>{if(confirm('删除动态？')){data.moments=data.moments.filter(m=>m.id!==x.id);save();moments()}}));c.append(a);box.append(c)}}
 $('#newMoment').onclick=async()=>{let text=prompt('给角色写一条动态');if(!text?.trim())return;let photos=(await mediaAll()).filter(m=>m.kind==='photo'),photo='';if(photos.length&&confirm('给动态附上一张相册照片吗？')){let n=Number(prompt('输入图片编号：\n'+photos.map((x,i)=>(i+1)+' '+x.name).join('\n').slice(0,1500)));if(Number.isInteger(n)&&n>0&&n<=photos.length)photo=photos[n-1].id}data.moments.unshift({id:uid(),text:text.trim(),photo,liked:false,at:Date.now()});save();moments()};
 /* 七、照片上传、网格、预览、删除；媒体永不塞入 localStorage。 */
-$('#addPhotos').onclick=()=>$('#photosInput').click();$('#photosInput').onchange=async e=>{for(let f of e.target.files){if(f.type.startsWith('image/'))await mediaWrite({id:uid(),kind:'photo',name:f.name,at:Date.now(),blob:f})}e.target.value='';photos()};let activePhoto='';async function photos(){await refresh();let box=$('#photoList');box.replaceChildren();let list=media.filter(m=>m.kind==='photo');if(!list.length)box.append(node('div','empty','请导入照片'));for(let p of list){let b=node('button'),i=node('img');i.src=objectUrl(p);i.alt=p.name;b.append(i);b.onclick=()=>{activePhoto=p.id;$('#previewImg').src=objectUrl(p);$('#preview').classList.add('open')};box.append(b)}}$('#closePreview').onclick=()=>$('#preview').classList.remove('open');$('#deletePreview').onclick=async()=>{if(confirm('删除选中照片？')){await mediaDelete(activePhoto);$('#preview').classList.remove('open');forgetUrls();photos()}};
+$('#addPhotos').onclick=()=>$('#photosInput').click();$('#photosInput').onchange=async e=>{for(let f of e.target.files){if(f.type.startsWith('image/'))await mediaWrite({id:uid(),kind:'photo',name:f.name,at:Date.now(),blob:f})}e.target.value='';photos()};let activePhoto='';async function photos(){if(!await refresh())return;let box=$('#photoList');box.replaceChildren();let list=media.filter(m=>m.kind==='photo');if(!list.length)box.append(node('div','empty','请导入照片'));for(let p of list){let b=node('button'),i=node('img');i.src=objectUrl(p);i.alt=p.name;b.append(i);b.onclick=()=>{activePhoto=p.id;$('#previewImg').src=objectUrl(p);$('#preview').classList.add('open')};box.append(b)}}$('#closePreview').onclick=()=>$('#preview').classList.remove('open');$('#deletePreview').onclick=async()=>{if(confirm('删除选中照片？')){await mediaDelete(activePhoto);$('#preview').classList.remove('open');forgetUrls();photos()}};
 /* 八、通话模拟计时与持久化记录。 */
 let callStart=0,callTimer=null;const format=n=>{n=Math.max(0,Math.floor(n||0));return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0')};function calls(){$('#callAvatar').replaceChildren();
 
@@ -826,7 +828,7 @@ $('#chatCall').onclick=()=>{
 };
 /* 九、音频导入、上一首下一首、播放暂停与进度拖动。 */
 let tracks=[],trackIndex=0,loaded='',player=$('#audio');$('#addMusic').onclick=()=>$('#musicInput').click();$('#musicInput').onchange=async e=>{for(let f of e.target.files){if(f.type.startsWith('audio/')||/\.(mp3|m4a|aac|wav|ogg|flac)$/i.test(f.name))await mediaWrite({id:uid(),kind:'music',name:f.name,at:Date.now(),blob:f})}e.target.value='';songs()};
-async function songs(){await refresh();tracks=media.filter(m=>m.kind==='music');let box=$('#songList');box.replaceChildren();if(!tracks.length)box.append(node('div','empty','还没有歌曲'));if(trackIndex>=tracks.length)trackIndex=0;tracks.forEach((t,i)=>{let d=node('div','card row');d.append(node('span','grow',t.name),action('播放',()=>{trackIndex=i;loadTrack(true)}),action('删除',async()=>{if(!confirm('删除歌曲？'))return;player.pause();player.removeAttribute('src');loaded='';await mediaDelete(t.id);forgetUrls();songs()}));box.append(d)});if(!loaded&&tracks.length)loadTrack(false);if(!tracks.length){$('#track').textContent='暂无歌曲';$('#play').textContent='播放'}}
+async function songs(){ if(!await refresh())return;tracks=media.filter(m=>m.kind==='music');let box=$('#songList');box.replaceChildren();if(!tracks.length)box.append(node('div','empty','还没有歌曲'));if(trackIndex>=tracks.length)trackIndex=0;tracks.forEach((t,i)=>{let d=node('div','card row');d.append(node('span','grow',t.name),action('播放',()=>{trackIndex=i;loadTrack(true)}),action('删除',async()=>{if(!confirm('删除歌曲？'))return;player.pause();player.removeAttribute('src');loaded='';await mediaDelete(t.id);forgetUrls();songs()}));box.append(d)});if(!loaded&&tracks.length)loadTrack(false);if(!tracks.length){$('#track').textContent='暂无歌曲';$('#play').textContent='播放'}}
 function loadTrack(start){let t=tracks[trackIndex];if(!t)return;let u=objectUrl(t);if(loaded!==u){player.src=u;loaded=u}$('#track').textContent=t.name;if(start)player.play().catch(e=>alert('无法播放：'+e.message));$('#play').textContent=start?'暂停':'播放'}$('#play').onclick=()=>{if(!tracks.length)return;if(player.paused)loadTrack(true);else{player.pause();$('#play').textContent='播放'}};$('#prev').onclick=()=>{if(tracks.length){trackIndex=(trackIndex-1+tracks.length)%tracks.length;loadTrack(true)}};$('#next').onclick=()=>{if(tracks.length){trackIndex=(trackIndex+1)%tracks.length;loadTrack(true)}};player.ontimeupdate=()=>{$('#seek').value=player.duration?100*player.currentTime/player.duration:0;$('#songTime').textContent=format(player.currentTime)+' / '+format(player.duration)};$('#seek').oninput=e=>{if(player.duration)player.currentTime=player.duration*e.target.value/100};player.onended=()=>$('#next').click();
 /* 十、备忘、长期记忆：新增、编辑、删除并保存时间。 */
 function editable(target,key,title){let box=$(target);box.replaceChildren();if(!data[key].length)box.append(node('div','empty','暂无内容'));for(let x of data[key]){let c=node('div','card');c.append(node('p','',x.text),node('div','time',date(x.at)));let a=node('div','actions');a.append(action('编辑',()=>{let t=prompt('编辑'+title,x.text);if(t?.trim()){x.text=t.trim();x.at=Date.now();save();editable(target,key,title)}}),action('删除',()=>{if(confirm('删除此条？')){data[key]=data[key].filter(y=>y.id!==x.id);save();editable(target,key,title)}}));c.append(a);box.append(c)}}function notes(){editable('#notesList','notes','备忘')}function memories(){editable('#memoryList','memories','记忆')}$('#newNote').onclick=()=>{let t=prompt('新备忘');if(t?.trim()){data.notes.unshift({id:uid(),text:t.trim(),at:Date.now()});save();notes()}};$('#newMemory').onclick=()=>{let t=prompt('要长期记住什么？');if(t?.trim()){remember(t.trim());memories()}};
