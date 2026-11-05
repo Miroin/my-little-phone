@@ -740,7 +740,7 @@ async function choosePersonalAvatar(target){
     alert('头像更换成功！');
   }
 }
- async function saveAvatarForSlot(target,blob,filename){
+async function saveAvatarForSlot(target,blob,filename){
   if(!['my','yan'].includes(target)||!blob)return false;
 
   const previous=data.avatarSlots?.[target]||
@@ -796,7 +796,6 @@ async function renderAvatarManager(target){
   upload.hidden=true;
 
   const uploadBtn=action('上传新头像',()=>upload.click());
-  upload.onclick=()=>upload.click();
 
   upload.onchange=async()=>{
     const file=upload.files?.[0];
@@ -839,7 +838,6 @@ async function renderAvatarManager(target){
     img.alt=item.name||'头像';
     img.style.cssText='width:100%;aspect-ratio:1;object-fit:cover;border-radius:14px';
     tile.append(img);
-
     tile.append(node('div','muted',item.name||'头像'));
 
     if(current){
@@ -862,7 +860,6 @@ async function renderAvatarManager(target){
     if(!current&&!usedByOther){
       tile.append(action('删除',async()=>{
         if(!confirm('确定删除这个头像吗？'))return;
-
         if(await mediaDelete(item.id)){
           await renderAvatarManager(target);
         }
@@ -892,7 +889,6 @@ async function choosePersonalAvatar(target){
   if(choice===null)return;
 
   const index=Number(choice)-1;
-
   if(!Number.isInteger(index)||index<0||index>=photos.length){
     alert('编号不正确');
     return;
