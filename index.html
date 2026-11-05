@@ -314,8 +314,33 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
     <button class="btn">发送</button>
   </form>
 </section>
+<section class="screen" id="homeLife">
+  <header class="head">
+    <button class="back" data-home>‹</button>
+    <b>我们的小家</b>
+  </header>
+  <main class="body">
+    <div class="card center">
+      <div style="font-size:64px">🏡</div>
+      <h2>欢迎回家</h2>
+      <p>这里是你和沈砚共同生活的小窝。</p>
+      <p class="muted">住宅场景正在建设中，之后会加入楼层切换、自由移动、宠物和自主生活事件。</p>
+    </div>
+  </main>
+</section>
 <section class="screen" id="moments"><header class="head"><button class="back" data-home>‹</button><b>朋友圈</b><button class="btn small" id="newMoment">发布</button></header><main class="body" id="momentsList"></main></section>
-<section class="screen" id="album"><header class="head"><button class="back" data-home>‹</button><b>相册</b><button class="btn small" id="addPhotos">导入照片</button><input hidden type="file" accept="image/*" multiple id="photosInput"></header><main class="body"><div class="grid photos" id="photoList"></div></main></section>
+<section class="screen" id="album">
+<header class="head">
+<button class="back" data-home>‹</button>
+<b>回忆</b>
+<button class="btn alt small" data-go="notes">备忘</button>
+<button class="btn small" id="addPhotos">导入照片</button>
+<input hidden type="file" accept="image/*" multiple id="photosInput">
+</header>
+<main class="body">
+<div class="grid photos" id="photoList"></div>
+</main>
+</section>
 <section class="screen" id="calls"><header class="head"><button class="back" data-home>‹</button><b>通话</b></header><main class="body"><div class="card center"><div class="avatar big" id="callAvatar">♡</div><h2 id="callName"></h2><div id="callStatus" class="muted">尚未接通</div><h1 id="callClock">00:00</h1><div class="actions" style="justify-content:center"><button class="btn" id="connect">接通</button><button class="btn danger" id="hangup">挂断</button></div><p class="muted">此处为模拟通话计时，不支持真实语音。</p></div><h3>通话记录</h3><div id="callList"></div></main></section>
 <section class="screen" id="music"><header class="head"><button class="back" data-home>‹</button><b>音乐</b><button class="btn small" id="addMusic">导入音频</button><input hidden type="file" accept="audio/*" multiple id="musicInput"></header><main class="body"><div class="card center"><div style="font-size:65px;color:var(--main)">♫</div><b id="track">暂无歌曲</b><p id="songTime" class="muted">00:00 / 00:00</p><input id="seek" type="range" min="0" max="100" value="0"><div class="actions" style="justify-content:center"><button class="btn alt" id="prev">上一首</button><button class="btn" id="play">播放</button><button class="btn alt" id="next">下一首</button></div></div><div id="songList"></div><audio id="audio"></audio></main></section>
 <section class="screen" id="notes"><header class="head"><button class="back" data-home>‹</button><b>备忘</b><button class="btn small" id="newNote">新建</button></header><main class="body" id="notesList"></main></section>
@@ -370,7 +395,8 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
   <section class="screen" id="personal">
   <header class="head">
     <button class="back" data-home>‹</button>
-    <b>个人资料</b>
+   <b>个人资料</b>
+<button class="btn alt small" data-go="role">角色管理</button>
   </header>
 
   <main class="body">
@@ -483,8 +509,9 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
 </section>
 <section class="screen" id="settings"><header class="head"><button class="back" data-home>‹</button><b>设置</b></header><main class="body"><form id="settingsForm"><div class="field"><label>显示名字（覆盖人设名字）</label><input id="displayName"></div><div class="field"><label>桌面底部小字</label><input id="footerText"></div><div class="field"><label>配色</label><select id="theme"><option value="pink">浅粉淡紫</option><option value="lavender">薰衣草紫</option><option value="cream">奶油色</option><option value="dark">夜色</option></select></div><div class="field"><label>最近聊天带几条（2–40）</label><input id="context" type="number" min="2" max="40"></div><div class="field"><label class="switch">自动摘要旧聊天 <input id="summaryOn" type="checkbox"></label></div><div class="field"><label>长期记忆上限（10–500）</label><input id="memoryMax" type="number" min="10" max="500"></div><div class="field"><label class="switch">跨天打开时补发主动消息 <input id="proactive" type="checkbox"></label></div><div class="actions">
 <button class="btn">保存设置</button>
+<button type="button" class="btn alt" data-go="api">接口与模型</button>
+<button type="button" class="btn alt" data-go="backup">备份与恢复</button>
 <button type="button" class="btn alt" data-go="beauty">🎨 美化中心</button>
-<button type="button" class="btn danger" data-go="backup">去清空数据</button>
 </div></form></main></section>
 <div class="preview" id="preview"><img id="previewImg" alt="预览"><div class="actions"><button class="btn alt" id="closePreview">关闭</button><button class="btn danger" id="deletePreview">删除</button></div></div>
 </div><script>
@@ -1010,7 +1037,17 @@ other.value=custom.other||getComputedStyle(document.documentElement).getProperty
   const sayings=['今天也想听你说说话。','有一件小事，想第一个告诉你。','你来啦，我一直在这里。','希望你今天有一些开心的瞬间。','记得吃饭，也记得来看看我。','平常的一天，也想和你一起度过。','有什么心事，可以告诉我。'];
 function daily(){if(data.today!==day()||!data.todayText){let n=[...day()].reduce((a,c)=>a+c.charCodeAt(0),0);data.today=day();data.todayText=sayings[n%sayings.length];save()}return data.todayText}
 function clock(){$('#lockTime').textContent=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false});$('#lockDate').textContent=new Date().toLocaleDateString('zh-CN',{dateStyle:'full'});$('#lockQuote').textContent=daily()}
-const apps=[['chat','消息','✉'],['moments','朋友圈','✿'],['album','相册','▧'],['calls','通话','☎'],['music','音乐','♫'],['notes','备忘','✎'],['role','角色管理','♙'],['api','接口','⚙'],['backup','备份','▣'],['settings','设置','☷']];
+const apps=[
+  ['chat','聊天','✉'],
+  ['homeLife','我们的小家','⌂'],
+  ['moments','朋友圈','✿'],
+  ['music','音乐','♫'],
+  ['album','回忆','▧'],
+  ['personal','个人资料','♙'],
+  ['calls','通话','☎'],
+  ['beauty','美化中心','✧'],
+  ['settings','设置','☷']
+];
 function home(){$('#homeTitle').textContent=name()+'的小手机';$('#daily').textContent='今天想对你说：'+daily();$('#daily').onclick=()=>show('chat');$('#footer').textContent=data.settings.footer;let box=$('#icons');box.replaceChildren();for(let [id,label,sym] of apps){let b=node('button','appicon');b.append(node('i','',sym),node('span','',label));b.onclick=()=>show(id);box.append(b)}}
 $('#lock').onclick=()=>show('home');$('#lock').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show('home')}};
 /* 五、聊天：本地关键词 / 网络接口、记忆、世界书、上下文和摘要。 */
