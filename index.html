@@ -374,6 +374,11 @@ let data={
   myProfile:{...DEF.myProfile,...(old.myProfile||{})},
   yanProfile:{...DEF.yanProfile,...(old.yanProfile||{})}
 };
+  // 头像库当前使用关系，兼容旧版固定头像 ID。
+data.avatarSlots = {
+  my: old.avatarSlots?.my || 'my-avatar',
+  yan: old.avatarSlots?.yan || 'yan-avatar'
+};
 // API Key 独立保存，并迁移旧版本密钥
 const API_KEY_STORAGE='rp_phone_api_key_v1';
 
