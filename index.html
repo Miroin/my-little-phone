@@ -640,26 +640,22 @@ async function renderAvatarManager(target){
   upload.accept='image/*';
   upload.hidden=true;
 
-  const uploadBtn=action('上传新头像',()=>upload.click());
+   const uploadBtn=action('从手机相册选择',()=>upload.click());
 
   upload.onchange=async()=>{
     const file=upload.files?.[0];
     if(!file)return;
 
     if(await saveAvatarForSlot(target,file,file.name)){
-      alert('新头像已保存并启用！');
+      alert('头像已保存并启用！');
       await renderAvatarManager(target);
     }
+
     upload.value='';
   };
 
-  const photoBtn=action('从相册选择',async()=>{
-    await choosePersonalAvatar(target);
-    await renderAvatarManager(target);
-  });
-
-  card.append(upload,uploadBtn,photoBtn);
-  card.append(node('p','muted','点击设为当前切换头像，正在使用的头像不能删除。'));
+  card.append(upload,uploadBtn);
+  card.append(node('p','muted','选择手机中的照片即可直接设置头像；也可以在下方切换已保存的头像。'));
 
   const items=await mediaAll();
   if(!items)return;
