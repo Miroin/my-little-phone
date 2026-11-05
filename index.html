@@ -1654,66 +1654,9 @@ $('#sendForm').onsubmit=async e=>{
   condense();
   save();
 
-  await chat();
-
   $('#typing').classList.add('on');
 
-  let ans='';
-  let error='';
-  let start=Date.now();
-
-  try{
-    if(data.api.mode==='api'){
-      await refresh();
-
-      const recent=lastMsgs();
-      const apiMessages=await Promise.all(
-        recent.map(m=>buildApiMessage(m))
-      );
-
-      ans=await request([
-        {
-          role:'system',
-          content:promptSystem()
-        },
-        ...apiMessages
-      ]);
-    }else{
-      ans=localAnswer(t);
-    }
-  }catch(ex){
-    error=ex.message;
-    ans=localAnswer(t||'发送了一张表情包');
-  }
-
-  let rest=650-(Date.now()-start);
-
-  if(rest>0){
-    await new Promise(r=>setTimeout(r,rest));
-  }
-
-  if(error){
-    ans+='\n\n〔接口失败，已使用本地回复。原因：'+error+'〕';
-  }
-
-  const replyParts=splitAssistantMessages(ans);
-  const replyAt=Date.now();
-
-  for(const text of (replyParts.length?replyParts:[ans||'…'])){
-    data.messages.push({
-      id:uid(),
-      role:'assistant',
-      text,
-      at:replyAt,
-      fallback:!!error
-    });
-  }
-  save();
-
-  busy=false;
-  $('#typing').classList.remove('on');
-
-  await chat();
+  await deliverAssistantReply(t);
 };
 
 $('#message').onkeydown=e=>{
