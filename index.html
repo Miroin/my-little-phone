@@ -1324,9 +1324,9 @@ async function deliverAssistantReply(contextText){
 
   async function emit(text,fallback=false){
     if(shown>0){
-      const delay=Math.min(
-        1800,
-        Math.max(550,350+previous.length*42)
+           const delay=Math.min(
+        3000,
+        Math.max(1500,1200+previous.length*55)
       );
 
       await new Promise(resolve=>setTimeout(resolve,delay));
