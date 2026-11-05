@@ -714,35 +714,6 @@ async function renderAvatarManager(target){
   card.append(grid);
 }
 
-async function choosePersonalAvatar(target){
-  if(!['my','yan'].includes(target))return;
-  if(!await refresh())return;
-
-  const photos=media.filter(m=>m.kind==='photo');
-
-  if(!photos.length){
-    alert('小手叽相册里还没有照片，请先上传照片');
-    return;
-  }
-
-  const list=photos.map((p,i)=>(i+1)+'. '+p.name).join('\n');
-  const choice=prompt('选择一张照片作为头像：\n'+list);
-
-  if(choice===null)return;
-
-  const index=Number(choice)-1;
-
-  if(!Number.isInteger(index)||index<0||index>=photos.length){
-    alert('编号不正确');
-    return;
-  }
-
-  const photo=photos[index];
-
-  if(await saveAvatarForSlot(target,photo.blob,photo.name)){
-    alert('头像更换成功！');
-  }
-}
 let media=[],urls={};
 
 async function refresh(){
@@ -858,13 +829,6 @@ function renderCategories(target,items){
 renderCategories('my',myCategories);
 renderCategories('yan',yanCategories);
 
-  $('#myPersonalAvatar').onclick=()=>{
-  choosePersonalAvatar('my');
-};
-
-$('#yanPersonalAvatar').onclick=()=>{
-  choosePersonalAvatar('yan');
-};
 renderAvatarManager('my');
 renderAvatarManager('yan');
 loadMyAvatar();
