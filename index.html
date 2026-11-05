@@ -1531,10 +1531,6 @@ $('#sendForm').onsubmit=async e=>{
   const replyAt=Date.now();
 
   for(const text of (replyParts.length?replyParts:[ans||'…'])){
-    const replyParts=splitAssistantMessages(ans);
-  const replyAt=Date.now();
-
-  for(const text of (replyParts.length?replyParts:[ans||'…'])){
     data.messages.push({
       id:uid(),
       role:'assistant',
@@ -1543,7 +1539,6 @@ $('#sendForm').onsubmit=async e=>{
       fallback:!!error
     });
   }
-
   save();
 
   busy=false;
