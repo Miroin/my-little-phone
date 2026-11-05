@@ -778,10 +778,10 @@ async function renderAvatarManager(target){
   if(!['my','yan'].includes(target))return;
 
   const host=target==='my'?$('#myPersonalCard'):$('#yanPersonalCard');
+  if(!host)return;
+
   const id='avatarManager_'+target;
   let card=document.getElementById(id);
-
-  if(!host)return;
 
   if(!card){
     card=node('div','card');
@@ -862,6 +862,7 @@ async function renderAvatarManager(target){
     if(!current&&!usedByOther){
       tile.append(action('删除',async()=>{
         if(!confirm('确定删除这个头像吗？'))return;
+
         if(await mediaDelete(item.id)){
           await renderAvatarManager(target);
         }
@@ -891,6 +892,7 @@ async function choosePersonalAvatar(target){
   if(choice===null)return;
 
   const index=Number(choice)-1;
+
   if(!Number.isInteger(index)||index<0||index>=photos.length){
     alert('编号不正确');
     return;
