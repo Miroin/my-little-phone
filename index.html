@@ -234,7 +234,6 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
 <section class="screen" id="calls"><header class="head"><button class="back" data-home>‹</button><b>通话</b></header><main class="body"><div class="card center"><div class="avatar big" id="callAvatar">♡</div><h2 id="callName"></h2><div id="callStatus" class="muted">尚未接通</div><h1 id="callClock">00:00</h1><div class="actions" style="justify-content:center"><button class="btn" id="connect">接通</button><button class="btn danger" id="hangup">挂断</button></div><p class="muted">此处为模拟通话计时，不支持真实语音。</p></div><h3>通话记录</h3><div id="callList"></div></main></section>
 <section class="screen" id="music"><header class="head"><button class="back" data-home>‹</button><b>音乐</b><button class="btn small" id="addMusic">导入音频</button><input hidden type="file" accept="audio/*" multiple id="musicInput"></header><main class="body"><div class="card center"><div style="font-size:65px;color:var(--main)">♫</div><b id="track">暂无歌曲</b><p id="songTime" class="muted">00:00 / 00:00</p><input id="seek" type="range" min="0" max="100" value="0"><div class="actions" style="justify-content:center"><button class="btn alt" id="prev">上一首</button><button class="btn" id="play">播放</button><button class="btn alt" id="next">下一首</button></div></div><div id="songList"></div><audio id="audio"></audio></main></section>
 <section class="screen" id="notes"><header class="head"><button class="back" data-home>‹</button><b>备忘</b><button class="btn small" id="newNote">新建</button></header><main class="body" id="notesList"></main></section>
-<section class="screen" id="profile"><header class="head"><button class="back" data-home>‹</button><b>名片</b></header><main class="body"><div class="card center" id="profileContent"></div><button class="btn" data-go="persona">去编辑人设卡</button></main></section>
 <section class="screen" id="role">
   <header class="head">
     <button class="back" data-home>‹</button>
@@ -245,6 +244,12 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
       <div style="font-size:42px">♙</div>
       <h2>沈砚的角色档案</h2>
       <p class="muted">管理他的性格、生活、记忆，以及我们之间的关系。</p>
+    </div>
+
+    <div class="card center">
+      <h3>我的名片</h3>
+      <div id="profileContent"></div>
+      <button class="btn" data-go="persona">编辑人设卡</button>
     </div>
 
     <div class="card">
