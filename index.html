@@ -781,6 +781,8 @@ async function renderAvatarManager(target){
   const id='avatarManager_'+target;
   let card=document.getElementById(id);
 
+  if(!host)return;
+
   if(!card){
     card=node('div','card');
     card.id=id;
