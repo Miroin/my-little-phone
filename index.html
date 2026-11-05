@@ -494,7 +494,7 @@ let myAvatarUrl='';
 async function loadMyAvatar(){
   const items=await mediaAll();
 if(!items)return;
-const item=items.find(x=>x.id==='my-avatar');
+const item=items.find(x=>x.id===(data.avatarSlots?.my||'my-avatar'));
 
   if(myAvatarUrl){
     URL.revokeObjectURL(myAvatarUrl);
@@ -542,7 +542,7 @@ function renderMyAvatar(){
 async function loadYanAvatar(){
   const items=await mediaAll();
   if(!items)return;
-  const item=items.find(x=>x.id==='yan-avatar');
+ const item=items.find(x=>x.id===(data.avatarSlots?.yan||'yan-avatar'));
 
   if(yanAvatarUrl){
     URL.revokeObjectURL(yanAvatarUrl);
@@ -953,7 +953,9 @@ $('#backupInput').onchange=async e=>{
       api:{...DEF.api,...j.data.api,key:data.api.key},
       settings:{...DEF.settings,...j.data.settings},
       myProfile:{...DEF.myProfile,...j.data.myProfile},
-      yanProfile:{...DEF.yanProfile,...j.data.yanProfile}
+          restored.avatarSlots = {
+      my: j.data.avatarSlots?.my || 'my-avatar',
+      yan: j.data.avatarSlots?.yan || 'yan-avatar'
     };
 
     for(let k of ['messages','memories','notes','moments','calls','world']){
