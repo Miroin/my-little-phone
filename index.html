@@ -1185,6 +1185,225 @@ function splitAssistantMessages(raw){
 
   return result;
 }
+  async function requestStream(messages,onSentence){
+  const a=data.api;
+
+  if(!a.model||!a.url){
+    throw new Error('请填写接口地址和模型名');
+  }
+
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(),90000);
+
+  try{
+    const response=await fetch(normalizeUrl(a.url),{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        ...(a.key?{'Authorization':'Bearer '+a.key}:{})
+      },
+      body:JSON.stringify({
+        model:a.model,
+        temperature:+a.temperature,
+        messages,
+        stream:true
+      }),
+      signal:ctrl.signal
+    });
+
+    if(!response.ok){
+      throw new Error('HTTP '+response.status+'：'+(await response.text()).slice(0,240));
+    }
+
+    if(!response.body){
+      throw new Error('当前浏览器不支持流式读取');
+    }
+
+    const reader=response.body.getReader();
+    const decoder=new TextDecoder();
+    let buffer='';
+    let pending='';
+    let finished=false;
+
+    async function consumeContent(content){
+      pending+=content;
+
+      while(true){
+        let end=-1;
+
+        for(let i=0;i<pending.length;i++){
+          if('。！？!?'.includes(pending[i])||pending[i]==='\n'){
+            end=i;
+            break;
+          }
+        }
+
+        if(end<0)break;
+
+        const sentence=pending.slice(0,end+1).trim();
+        pending=pending.slice(end+1);
+
+        if(sentence){
+          await onSentence(sentence);
+        }
+      }
+    }
+
+    async function handleLine(line){
+      line=line.replace(/\r$/,'');
+
+      if(!line.startsWith('data:'))return;
+
+      const payload=line.slice(5).trim();
+
+      if(payload==='[DONE]'){
+        finished=true;
+        return;
+      }
+
+      if(!payload)return;
+
+      let json;
+
+      try{
+        json=JSON.parse(payload);
+      }catch(e){
+        return;
+      }
+
+      let content=json?.choices?.[0]?.delta?.content;
+
+      if(Array.isArray(content)){
+        content=content.map(x=>x.text||'').join('');
+      }
+
+      if(typeof content==='string'&&content){
+        await consumeContent(content);
+      }
+    }
+
+    while(!finished){
+      const {value,done}=await reader.read();
+
+      if(done)break;
+
+      buffer+=decoder.decode(value,{stream:true});
+
+      const lines=buffer.split('\n');
+      buffer=lines.pop()||'';
+
+      for(const line of lines){
+        if(finished)break;
+        await handleLine(line);
+      }
+    }
+
+    buffer+=decoder.decode();
+
+    if(buffer.trim()){
+      await handleLine(buffer);
+    }
+
+    if(pending.trim()){
+      await onSentence(pending.trim());
+    }
+
+  }catch(e){
+    if(e.name==='AbortError'){
+      throw new Error('90秒请求超时');
+    }
+    throw e;
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+async function deliverAssistantReply(contextText){
+  let shown=0;
+  let previous='';
+
+  async function emit(text,fallback=false){
+    if(shown>0){
+      const delay=Math.min(
+        1800,
+        Math.max(550,350+previous.length*42)
+      );
+
+      await new Promise(resolve=>setTimeout(resolve,delay));
+    }
+
+    data.messages.push({
+      id:uid(),
+      role:'assistant',
+      text,
+      at:Date.now(),
+      fallback
+    });
+
+    if(!save()){
+      data.messages.pop();
+      throw new Error('消息保存失败');
+    }
+
+    await chat();
+
+    previous=text;
+    shown++;
+  }
+
+  try{
+    if(data.api.mode==='api'){
+      await refresh();
+
+      const recent=lastMsgs();
+
+      const apiMessages=await Promise.all(
+        recent.map(m=>buildApiMessage(m))
+      );
+
+      await requestStream([
+        {
+          role:'system',
+          content:promptSystem()
+        },
+        ...apiMessages
+      ],sentence=>emit(sentence,false));
+
+    }else{
+      const local=splitAssistantMessages(
+        localAnswer(contextText)
+      );
+
+      for(const sentence of local){
+        await emit(sentence,false);
+      }
+    }
+
+    if(shown===0){
+      await emit('…',false);
+    }
+
+  }catch(ex){
+    if(ex.message==='消息保存失败'){
+      alert('消息保存失败，请检查浏览器存储空间。');
+    }else if(shown===0){
+      const fallback=splitAssistantMessages(
+        localAnswer(contextText)
+      );
+
+      for(const sentence of (fallback.length?fallback:['…'])){
+        await emit(sentence,true);
+      }
+    }else{
+      await emit('〔回复中断：'+ex.message+'〕',true);
+    }
+  }
+
+  busy=false;
+  $('#typing').classList.remove('on');
+
+  await chat();
+}
   async function chat(){
   if(!await refresh())return;
 
@@ -1289,62 +1508,7 @@ send.onclick=async()=>{
 
   $('#typing').classList.add('on');
 
-  let ans='';
-  let error='';
-  let start=Date.now();
-
-  try{
-    if(data.api.mode==='api'){
-      await refresh();
-
-      const recent=lastMsgs();
-      const apiMessages=await Promise.all(
-        recent.map(m=>buildApiMessage(m))
-      );
-
-      ans=await request([
-        {
-          role:'system',
-          content:promptSystem()
-        },
-        ...apiMessages
-      ]);
-    }else{
-      ans=localAnswer('用户发送了一张表情包');
-    }
-  }catch(ex){
-    error=ex.message;
-    ans=localAnswer('用户发送了一张表情包');
-  }
-
-  let rest=650-(Date.now()-start);
-  if(rest>0){
-    await new Promise(r=>setTimeout(r,rest));
-  }
-
-  if(error){
-    ans+='\n\n〔接口失败，已使用本地回复。原因：'+error+'〕';
-  }
-
-   const replyParts=splitAssistantMessages(ans);
-  const replyAt=Date.now();
-
-  for(const text of (replyParts.length?replyParts:[ans||'…'])){
-    data.messages.push({
-      id:uid(),
-      role:'assistant',
-      text,
-      at:replyAt,
-      fallback:!!error
-    });
-  }
-
-  save();
-
-  busy=false;
-  $('#typing').classList.remove('on');
-
-  await chat();
+  await deliverAssistantReply('用户发送了一张表情包');
 };
 
     const del=node('button','','删除');
