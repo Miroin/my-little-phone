@@ -374,9 +374,31 @@ let data={
   myProfile:{...DEF.myProfile,...(old.myProfile||{})},
   yanProfile:{...DEF.yanProfile,...(old.yanProfile||{})}
 };
+// API Key 独立保存，并迁移旧版本密钥
+const API_KEY_STORAGE='rp_phone_api_key_v1';
 
+try{
+  const storedKey=localStorage.getItem(API_KEY_STORAGE);
+  if(storedKey!==null){
+    data.api.key=storedKey;
+  }else if(data.api.key){
+    localStorage.setItem(API_KEY_STORAGE,data.api.key);
+  }
+}catch(e){
+  console.warn('API Key 独立保存失败',e);
+}
 for(let k of ['messages','memories','notes','moments','calls','world'])if(!Array.isArray(data[k]))data[k]=[];
-function save(){try{localStorage.setItem('rp_phone_all_v2',JSON.stringify(data));return true}catch(e){alert('文字保存失败，可能已满或处于受限浏览模式。请导出备份。');return false}}
+function save(){
+  try{
+    let safe=copy(data);
+    if(safe.api)safe.api.key='';
+    localStorage.setItem('rp_phone_all_v2',JSON.stringify(safe));
+    return true;
+  }catch(e){
+    alert('文字保存失败，可能已满或处于受限浏览模式。请导出备份。');
+    return false;
+  }
+}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8),name=()=>data.settings.name||data.persona.name||'未命名的他',avatar=()=>Array.from(name())[0]||'♡';
 const date=t=>new Date(t||Date.now()).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}),day=()=>{let d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
 function node(tag,cls,text){let x=document.createElement(tag);if(cls)x.className=cls;if(text!==undefined)x.textContent=String(text);return x}
