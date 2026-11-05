@@ -206,6 +206,61 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
   flex:1;min-width:0;min-height:43px;height:45px;
   border-radius:var(--radius-lg);padding:10px 13px
 }
+  /* 表情包面板 */
+#stickerPanel{
+  display:none;
+  padding:12px;
+  background:var(--card);
+  border-top:1px solid var(--line);
+  max-height:230px;
+  overflow-y:auto
+}
+#stickerPanel.open{display:block}
+.sticker-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  margin-bottom:10px
+}
+.sticker-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:9px
+}
+.sticker-tile{
+  min-width:0;
+  position:relative;
+  background:var(--soft);
+  border:1px solid var(--line);
+  border-radius:var(--radius-md);
+  padding:5px;
+  overflow:hidden
+}
+.sticker-tile img{
+  display:block;
+  width:100%;
+  aspect-ratio:1;
+  object-fit:contain
+}
+.sticker-tile button{
+  width:100%;
+  margin-top:5px;
+  padding:5px 2px;
+  border-radius:9px;
+  background:var(--main);
+  color:white;
+  font-size:12px
+}
+.chat-sticker{
+  display:block;
+  max-width:170px;
+  max-height:170px;
+  width:auto;
+  height:auto;
+  object-fit:contain;
+  border-radius:10px
+}
 .photos button{
   aspect-ratio:1;padding:0;background:var(--soft);
   border-radius:var(--radius-md);overflow:hidden
@@ -224,11 +279,41 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
 </style></head><body><div class="phone">
 <section class="screen active" id="lock" tabindex="0"><div id="lockTime">00:00</div><div id="lockDate"></div><div id="lockQuote"></div><div class="muted">轻点屏幕解锁 ♡</div></section>
 <section class="screen" id="home"><div class="welcome"><h2 id="homeTitle"></h2><div id="daily"></div></div><div id="icons" class="grid icons"></div><div id="footer"></div></section>
-<section class="screen" id="chat"><header class="head"><button class="back" data-home>‹</button><div class="avatar" id="chatAvatar">♡</div><b><span id="chatName"></span><small id="chatState"></small></b><button class="btn alt small" id="clearChat">清空</button></header><main class="body" id="chatScroll"><div id="chatList"></div></main><div id="typing">正在输入 ···</div><form class="composer" id="sendForm">
-  <button type="button" class="btn alt" id="chatCall">☎</button>
-  <textarea id="message" placeholder="说点什么…"></textarea>
-  <button class="btn">发送</button>
-</form></section>
+<section class="screen" id="chat">
+  <header class="head">
+    <button class="back" data-home>‹</button>
+    <div class="avatar" id="chatAvatar">♡</div>
+    <b>
+      <span id="chatName"></span>
+      <small id="chatState"></small>
+    </b>
+    <button class="btn alt small" id="clearChat">清空</button>
+  </header>
+
+  <main class="body" id="chatScroll">
+    <div id="chatList"></div>
+  </main>
+
+  <div id="typing">正在输入 ···</div>
+
+  <div id="stickerPanel">
+    <div class="sticker-toolbar">
+      <b>我的表情包</b>
+      <button type="button" class="btn small" id="addStickers">＋ 上传</button>
+      <input hidden type="file" accept="image/*" multiple id="stickerInput">
+    </div>
+    <div class="sticker-grid" id="stickerGrid">
+      <div class="empty">表情包还没有加载</div>
+    </div>
+  </div>
+
+  <form class="composer" id="sendForm">
+    <button type="button" class="btn alt" id="chatCall">☎</button>
+    <button type="button" class="btn alt" id="toggleStickers">☺</button>
+    <textarea id="message" placeholder="说点什么…"></textarea>
+    <button class="btn">发送</button>
+  </form>
+</section>
 <section class="screen" id="moments"><header class="head"><button class="back" data-home>‹</button><b>朋友圈</b><button class="btn small" id="newMoment">发布</button></header><main class="body" id="momentsList"></main></section>
 <section class="screen" id="album"><header class="head"><button class="back" data-home>‹</button><b>相册</b><button class="btn small" id="addPhotos">导入照片</button><input hidden type="file" accept="image/*" multiple id="photosInput"></header><main class="body"><div class="grid photos" id="photoList"></div></main></section>
 <section class="screen" id="calls"><header class="head"><button class="back" data-home>‹</button><b>通话</b></header><main class="body"><div class="card center"><div class="avatar big" id="callAvatar">♡</div><h2 id="callName"></h2><div id="callStatus" class="muted">尚未接通</div><h1 id="callClock">00:00</h1><div class="actions" style="justify-content:center"><button class="btn" id="connect">接通</button><button class="btn danger" id="hangup">挂断</button></div><p class="muted">此处为模拟通话计时，不支持真实语音。</p></div><h3>通话记录</h3><div id="callList"></div></main></section>
