@@ -583,6 +583,7 @@ async function mediaWrite(v){try{let d=await db();await new Promise((ok,bad)=>{l
 async function mediaDelete(id){try{let d=await db();await new Promise((ok,bad)=>{let t=d.transaction('files','readwrite');t.objectStore('files').delete(id);t.oncomplete=ok;t.onerror=()=>bad(t.error)});return true}catch(e){return false}}
 async function mediaClear(){try{let d=await db();await new Promise((ok,bad)=>{let t=d.transaction('files','readwrite');t.objectStore('files').clear();t.oncomplete=ok;t.onerror=()=>bad(t.error)});return true}catch(e){return false}}
 async function choosePersonalAvatar(target){
+  if(!['my','yan'].includes(target))return;
   if(!await refresh())return;
 
   const photos=media.filter(m=>m.kind==='photo');
@@ -604,22 +605,9 @@ async function choosePersonalAvatar(target){
   }
 
   const photo=photos[index];
-  const id=target==='my'?'my-avatar':'yan-avatar';
-
-  const ok=await mediaWrite({
-    id,
-    kind:'avatar',
-    name:target==='my'?'我的头像':'沈砚的头像',
-    at:Date.now(),
-    blob:photo.blob
-  });
+  const ok=await saveAvatarForSlot(target,photo.blob,photo.name);
 
   if(ok){
-    if(target==='my'){
-      await loadMyAvatar();
-    }else{
-      await loadYanAvatar();
-    }
     alert('头像更换成功！');
   }
 }
