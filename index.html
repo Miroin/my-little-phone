@@ -862,7 +862,22 @@ function api(){$('#mode').value=data.api.mode;$('#endpoint').value=data.api.url;
 function settings(){let s=data.settings;$('#displayName').value=s.name;$('#footerText').value=s.footer;$('#theme').value=s.theme;$('#context').value=s.context;$('#summaryOn').checked=s.summarize;$('#memoryMax').value=s.max;$('#proactive').checked=s.proactive}$('#settingsForm').onsubmit=e=>{e.preventDefault();data.settings={name:$('#displayName').value.trim(),footer:$('#footerText').value,theme:$('#theme').value,customColors:data.settings.customColors,context:Math.max(2,Math.min(40,+$('#context').value||12)),summarize:$('#summaryOn').checked,max:Math.max(10,Math.min(500,+$('#memoryMax').value||80)),proactive:$('#proactive').checked};save();theme();home();alert('设置已保存')};
 /* 十五、备份包含文字 JSON 和 IndexedDB 的二进制媒体（base64）。 */
 function blob64(blob){return new Promise((ok,bad)=>{let reader=new FileReader();reader.onload=()=>ok(String(reader.result).split(',')[1]);reader.onerror=()=>bad(reader.error);reader.readAsDataURL(blob)})}function from64(x,type){let raw=atob(x),part=[];for(let i=0;i<raw.length;i+=8192){let slice=raw.slice(i,i+8192),arr=new Uint8Array(slice.length);for(let j=0;j<slice.length;j++)arr[j]=slice.charCodeAt(j);part.push(arr)}return new Blob(part,{type:type||'application/octet-stream'})}
-async function stats(){let items=await mediaAll();let bytes=new Blob([JSON.stringify(data)]).size+items.reduce((a,x)=>a+x.blob.size,0);$('#statistics').textContent='消息 '+data.messages.length+' 条 · 记忆 '+data.memories.length+' 条 · 世界书 '+data.world.length+' 条\n照片 '+items.filter(x=>x.kind==='photo').length+' 张 · 音乐 '+items.filter(x=>x.kind==='music').length+' 首\n占用约 '+(bytes/1048576).toFixed(2)+' MB（不含数据库额外开销）'}
+async function stats(){
+  const items=await mediaAll();
+
+  if(!items){
+    $('#statistics').textContent='媒体库读取失败，统计暂不可用。';
+    return;
+  }
+
+  const bytes=new Blob([JSON.stringify(data)]).size
+    +items.reduce((a,x)=>a+(x.blob?.size||0),0);
+
+  $('#statistics').textContent=
+    '消息 '+data.messages.length+' 条 · 记忆 '+data.memories.length+' 条 · 世界书 '+data.world.length+' 条\n'+
+    '照片 '+items.filter(x=>x.kind==='photo').length+' 张 · 音乐 '+items.filter(x=>x.kind==='music').length+' 首\n'+
+    '占用约 '+(bytes/1048576).toFixed(2)+' MB（不含数据库额外开销）';
+}
 $('#backupOut').onclick=async()=>{let b=$('#backupOut');b.disabled=true;b.textContent='正在打包…';try{let list=[];for(let m of await mediaAll())list.push({id:m.id,kind:m.kind,name:m.name,at:m.at,type:m.blob.type,base64:await blob64(m.blob)});let backupData=copy(data);
 if(backupData.api)backupData.api.key='';
 download(JSON.stringify({format:'rp-phone-v2',version:2,exportedAt:new Date().toISOString(),data:backupData,media:list}),'小手机完整备份_'+day()+'.json')}catch(e){alert('导出失败：'+e.message)}finally{b.disabled=false;b.textContent='导出备份 JSON'}};
