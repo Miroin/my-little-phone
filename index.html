@@ -410,7 +410,63 @@ function show(id){$$('.screen').forEach(s=>s.classList.toggle('active',s.id===id
 $$('[data-home]').forEach(b=>b.onclick=()=>show('home'));$$('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
 /* 三、IndexedDB 中只放图片和音乐 Blob，保护文字存储空间。 */
 let dbWait;function db(){if(dbWait)return dbWait;dbWait=new Promise((ok,bad)=>{try{let r=indexedDB.open('rp_phone_media_v2',1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('files'))r.result.createObjectStore('files',{keyPath:'id'})};r.onsuccess=()=>ok(r.result);r.onerror=()=>bad(r.error)}catch(e){bad(e)}}).catch(e=>{dbWait=null;throw e});return dbWait}
-async function mediaAll(){try{let d=await db();return await new Promise((ok,bad)=>{let r=d.transaction('files').objectStore('files').getAll();r.onsuccess=()=>ok(r.result||[]);r.onerror=()=>bad(r.error)})}catch(e){console.warn(e);return []}}
+let mediaReadErrorShown=false;
+
+function reportMediaReadError(e){
+  console.error('媒体库读取失败',e);
+
+  if(!mediaReadErrorShown){
+    mediaReadErrorShown=true;
+    alert('媒体库读取失败：'+(e?.message||'未知错误')+'。请刷新页面后重试，不要清空数据或覆盖备份。');
+  }
+}
+
+async function mediaAll(){
+  try{
+    const d=await db();
+
+    const items=await new Promise((resolve,reject)=>{
+      let tx;
+
+      try{
+        tx=d.transaction('files','readonly');
+
+        const request=tx.objectStore('files').getAll();
+        let result=[];
+
+        request.onsuccess=()=>{
+          result=request.result||[];
+        };
+
+        request.onerror=()=>{
+          reject(request.error||new Error('读取媒体列表失败'));
+        };
+
+        tx.oncomplete=()=>{
+          resolve(result);
+        };
+
+        tx.onerror=()=>{
+          reject(tx.error||new Error('媒体库事务失败'));
+        };
+
+        tx.onabort=()=>{
+          reject(tx.error||new Error('媒体库事务被中止'));
+        };
+
+      }catch(e){
+        reject(e);
+      }
+    });
+
+    mediaReadErrorShown=false;
+    return items;
+
+  }catch(e){
+    reportMediaReadError(e);
+    return null;
+  }
+}
   let lockWallpaperUrl='';
   
 async function loadLockWallpaper(){
