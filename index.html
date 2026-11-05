@@ -1326,13 +1326,18 @@ send.onclick=async()=>{
     ans+='\n\n〔接口失败，已使用本地回复。原因：'+error+'〕';
   }
 
-  data.messages.push({
-    id:uid(),
-    role:'assistant',
-    text:ans,
-    at:Date.now(),
-    fallback:!!error
-  });
+   const replyParts=splitAssistantMessages(ans);
+  const replyAt=Date.now();
+
+  for(const text of (replyParts.length?replyParts:[ans||'…'])){
+    data.messages.push({
+      id:uid(),
+      role:'assistant',
+      text,
+      at:replyAt,
+      fallback:!!error
+    });
+  }
 
   save();
 
