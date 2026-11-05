@@ -1179,24 +1179,87 @@ async function renderStickerLibrary(){
 
     const send=node('button','','发送');
     send.type='button';
-    send.onclick=async()=>{
-      data.messages.push({
-        id:uid(),
-        role:'user',
-        text:'',
-        stickerId:item.id,
-        stickerName:item.name||'表情包',
-        at:Date.now()
-      });
+   
+send.onclick=async()=>{
+  if(busy){
+    alert('沈砚正在回复，请稍等一下。');
+    return;
+  }
 
-      if(!save()){
-        data.messages.pop();
-        return;
-      }
+  busy=true;
 
-      $('#stickerPanel').classList.remove('open');
-      await chat();
-    };
+  data.messages.push({
+    id:uid(),
+    role:'user',
+    text:'',
+    stickerId:item.id,
+    stickerName:item.name||'表情包',
+    at:Date.now()
+  });
+
+  if(!save()){
+    data.messages.pop();
+    busy=false;
+    return;
+  }
+
+  $('#stickerPanel').classList.remove('open');
+  await chat();
+
+  $('#typing').classList.add('on');
+
+  let ans='';
+  let error='';
+  let start=Date.now();
+
+  try{
+    if(data.api.mode==='api'){
+      await refresh();
+
+      const recent=lastMsgs();
+      const apiMessages=await Promise.all(
+        recent.map(m=>buildApiMessage(m))
+      );
+
+      ans=await request([
+        {
+          role:'system',
+          content:promptSystem()
+        },
+        ...apiMessages
+      ]);
+    }else{
+      ans=localAnswer('用户发送了一张表情包');
+    }
+  }catch(ex){
+    error=ex.message;
+    ans=localAnswer('用户发送了一张表情包');
+  }
+
+  let rest=650-(Date.now()-start);
+  if(rest>0){
+    await new Promise(r=>setTimeout(r,rest));
+  }
+
+  if(error){
+    ans+='\n\n〔接口失败，已使用本地回复。原因：'+error+'〕';
+  }
+
+  data.messages.push({
+    id:uid(),
+    role:'assistant',
+    text:ans,
+    at:Date.now(),
+    fallback:!!error
+  });
+
+  save();
+
+  busy=false;
+  $('#typing').classList.remove('on');
+
+  await chat();
+};
 
     const del=node('button','','删除');
     del.type='button';
