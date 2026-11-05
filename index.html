@@ -1252,10 +1252,160 @@ $('#stickerInput').onchange=async e=>{
   forgetUrls();
   await renderStickerLibrary();
 };
-let busy=false;$('#sendForm').onsubmit=async e=>{e.preventDefault();let t=$('#message').value.trim();if(!t||busy)return;busy=true;$('#message').value='';data.messages.push({id:uid(),role:'user',text:t,at:Date.now()});detectMemory(t);condense();save();chat();$('#typing').classList.add('on');let ans='',error='',start=Date.now();try{if(data.api.mode==='api')ans=await request([{role:'system',content:promptSystem()},...lastMsgs().map(m=>({
-  role:m.role==='user'?'user':'assistant',
-  content:m.text||(m.stickerId?'[发送了表情包：'+(m.stickerName||'表情包')+']':'')
-}))]);else ans=localAnswer(t)}catch(ex){error=ex.message;ans=localAnswer(t)}let rest=650-(Date.now()-start);if(rest>0)await new Promise(r=>setTimeout(r,rest));if(error)ans+='\n\n〔接口失败，已使用本地回复。原因：'+error+'〕';data.messages.push({id:uid(),role:'assistant',text:ans,at:Date.now(),fallback:!!error});save();busy=false;$('#typing').classList.remove('on');chat()};$('#message').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('#sendForm').requestSubmit()}};
+
+function blobToDataUrl(blob){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(reader.result);
+    reader.onerror=()=>reject(new Error('读取表情包图片失败'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function buildApiMessage(m){
+  const role=m.role==='user'?'user':'assistant';
+
+  if(m.stickerId&&role==='user'){
+    const sticker=media.find(x=>x.id===m.stickerId);
+
+    if(sticker?.blob){
+      const blob=sticker.blob;
+      const allowed=[
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp'
+      ];
+
+      if(!allowed.includes(blob.type)){
+        throw new Error(
+          '这张表情包的图片格式暂不支持，请使用 JPG、PNG、GIF 或 WebP。'
+        );
+      }
+
+      if(blob.size>20*1024*1024){
+        throw new Error('表情包图片超过20MB，请压缩后再发送。');
+      }
+
+      const imageData=await blobToDataUrl(blob);
+
+      return {
+        role:'user',
+        content:[
+          {
+            type:'text',
+            text:
+              (m.text?m.text+'\n':'')+
+              '用户发送了一张表情包。请认真观察图片中的画面、人物或动物的表情和动作、图片文字、情绪以及可能的网络梗。结合之前的聊天语境理解用户想表达什么，并自然回应。不要只机械描述图片。如果含义不确定，不要编造。'
+          },
+          {
+            type:'image_url',
+            image_url:{
+              url:imageData
+            }
+          }
+        ]
+      };
+    }
+  }
+
+  return {
+    role,
+    content:m.text||
+      (m.stickerId
+        ?'[发送了表情包：'+(m.stickerName||'表情包')+']'
+        :'')
+  };
+}
+
+let busy=false;
+
+$('#sendForm').onsubmit=async e=>{
+  e.preventDefault();
+
+  let t=$('#message').value.trim();
+
+  if(!t||busy)return;
+
+  busy=true;
+  $('#message').value='';
+
+  data.messages.push({
+    id:uid(),
+    role:'user',
+    text:t,
+    at:Date.now()
+  });
+
+  detectMemory(t);
+  condense();
+  save();
+
+  await chat();
+
+  $('#typing').classList.add('on');
+
+  let ans='';
+  let error='';
+  let start=Date.now();
+
+  try{
+    if(data.api.mode==='api'){
+      await refresh();
+
+      const recent=lastMsgs();
+      const apiMessages=await Promise.all(
+        recent.map(m=>buildApiMessage(m))
+      );
+
+      ans=await request([
+        {
+          role:'system',
+          content:promptSystem()
+        },
+        ...apiMessages
+      ]);
+    }else{
+      ans=localAnswer(t);
+    }
+  }catch(ex){
+    error=ex.message;
+    ans=localAnswer(t||'发送了一张表情包');
+  }
+
+  let rest=650-(Date.now()-start);
+
+  if(rest>0){
+    await new Promise(r=>setTimeout(r,rest));
+  }
+
+  if(error){
+    ans+='\n\n〔接口失败，已使用本地回复。原因：'+error+'〕';
+  }
+
+  data.messages.push({
+    id:uid(),
+    role:'assistant',
+    text:ans,
+    at:Date.now(),
+    fallback:!!error
+  });
+
+  save();
+
+  busy=false;
+  $('#typing').classList.remove('on');
+
+  await chat();
+};
+
+$('#message').onkeydown=e=>{
+  if(e.key==='Enter'&&!e.shiftKey){
+    e.preventDefault();
+    $('#sendForm').requestSubmit();
+  }
+};
+
 $('#clearChat').onclick=()=>{if(confirm('清空全部聊天（不清除长期记忆）？')){data.messages=[];data.summary='';data.summaryIndex=0;save();chat()}};
 /* 六、朋友圈：文本、可选相册图片、点赞、时间和删除。 */
 async function moments(){ if(!await refresh())return;let box=$('#momentsList');box.replaceChildren();if(!data.moments.length)box.append(node('div','empty','还没有动态'));for(let x of data.moments){let c=node('div','card'),heading=node('div','row');heading.append(node('div','avatar',avatar()),node('b','',name()));c.append(heading,node('p','',x.text),node('div','time',date(x.at)));let pic=media.find(m=>m.id===x.photo);if(pic){let im=node('img','postpic');im.src=objectUrl(pic);c.append(im)}let a=node('div','actions');a.append(action(x.liked?'♥ 已赞':'♡ 点赞',()=>{x.liked=!x.liked;save();moments()}),action('删除',()=>{if(confirm('删除动态？')){data.moments=data.moments.filter(m=>m.id!==x.id);save();moments()}}));c.append(a);box.append(c)}}
