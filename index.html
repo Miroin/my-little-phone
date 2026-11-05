@@ -384,7 +384,7 @@ try{
   }else if(data.api.key){
     localStorage.setItem(API_KEY_STORAGE,data.api.key);
   }
-}catch(e){
+}  save();catch(e){
   console.warn('API Key 独立保存失败',e);
 }
 for(let k of ['messages','memories','notes','moments','calls','world'])if(!Array.isArray(data[k]))data[k]=[];
