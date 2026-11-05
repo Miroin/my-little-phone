@@ -623,6 +623,43 @@ async function choosePersonalAvatar(target){
     alert('头像更换成功！');
   }
 }
+  async function saveAvatarForSlot(target,blob,filename){
+  if(!['my','yan'].includes(target)||!blob)return false;
+
+  const previous=data.avatarSlots?.[target]||
+    (target==='my'?'my-avatar':'yan-avatar');
+
+  const id=uid();
+
+  const ok=await mediaWrite({
+    id,
+    kind:'avatar',
+    name:filename||(target==='my'?'我的头像':'沈砚的头像'),
+    at:Date.now(),
+    blob
+  });
+
+  if(!ok)return false;
+
+  data.avatarSlots={
+    ...data.avatarSlots,
+    [target]:id
+  };
+
+  if(!save()){
+    data.avatarSlots[target]=previous;
+    await mediaDelete(id);
+    return false;
+  }
+
+  if(target==='my'){
+    await loadMyAvatar();
+  }else{
+    await loadYanAvatar();
+  }
+
+  return true;
+}
 let media=[],urls={};
 
 async function refresh(){
