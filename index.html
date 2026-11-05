@@ -474,6 +474,21 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
       <h3>自主维护</h3>
       <p class="muted">后续开放沈砚自主更新个人资料、共同回忆、关系记录与日常状态，并保留修改历史。</p>
     </div>
+    
+    <div class="card">
+      <h3>我的资料维护</h3>
+      <p class="muted">这里记录用户的生活习惯、喜好和重要信息。沈砚负责逐渐了解和记录，也可以在这里修正资料。</p>
+      <div id="roleMyProfileEditor"></div>
+      <div id="roleMyAvatarManager"></div>
+    </div>
+
+    <div class="card">
+      <h3>沈砚的资料维护</h3>
+      <p class="muted">管理沈砚自己的性格、行为习惯、喜好和其他特征。</p>
+      <div id="roleYanProfileEditor"></div>
+      <div id="roleYanAvatarManager"></div>
+    </div>
+
   </main>
 </section>
 
@@ -636,7 +651,7 @@ function show(id){
     },
     calls:calls,
     music:songs,
-    role:profile,
+    role:role,
     personal:personal,
     memory:memories,
     persona:persona,
@@ -863,10 +878,10 @@ async function saveAvatarForSlot(target,blob,filename){
 async function renderAvatarManager(target){
   if(!['my','yan'].includes(target))return;
 
-  const host=target==='my'?$('#myPersonalCard'):$('#yanPersonalCard');
+ const host=target==='my'?$('#roleMyAvatarManager'):$('#roleYanAvatarManager');
   if(!host)return;
 
-  const id='avatarManager_'+target;
+ const id='roleAvatarManager_'+target;
   let card=document.getElementById(id);
 
   if(!card){
@@ -1000,7 +1015,8 @@ function beauty(){
   loadLockWallpaper();
 }
 
-  let personalTarget='my';
+
+let personalTarget='my';
 
 function personal(){
   const my=$('#myPersonalCard');
@@ -1019,69 +1035,58 @@ function personal(){
   $('#yanPersonalTab').onclick=()=>switchTab('yan');
 
   $('#myPersonalName').textContent=data.myProfile.name||'我';
-  $('#myPersonalSignature').textContent=data.myProfile.signature||'填写你的个性签名';
+  $('#myPersonalSignature').textContent=data.myProfile.signature||'沈砚正在慢慢了解你';
 
   $('#yanPersonalName').textContent=data.yanProfile.name||'沈砚';
   $('#yanPersonalSignature').textContent=data.yanProfile.signature||'角色个性签名';
+
   const myCategories=[
-  '基本资料','喜欢的事物','不喜欢的事物',
-  '生活习惯','重要记忆','身体与周期','其他备注'
-];
+    '基本资料','喜欢的事物','不喜欢的事物',
+    '生活习惯','重要记忆','身体与周期','其他备注'
+  ];
 
-const yanCategories=[
-  '性格特征','行为习惯','喜欢的事物',
-  '讨厌的事物','说话风格','与你的关系',
-  '重要记忆','其他特征'
-];
+  const yanCategories=[
+    '性格特征','行为习惯','喜欢的事物',
+    '讨厌的事物','说话风格','与你的关系',
+    '重要记忆','其他特征'
+  ];
 
-function renderCategories(target,items){
-  const box=target==='my'
-    ?$('#myPersonalCategories')
-    :$('#yanPersonalCategories');
+  function renderCategories(target,items){
+    const box=target==='my'
+      ?$('#myPersonalCategories')
+      :$('#yanPersonalCategories');
 
-  box.replaceChildren();
+    box.replaceChildren();
 
-  const profile=target==='my'
-    ?data.myProfile
-    :data.yanProfile;
+    const record=target==='my'
+      ?data.myProfile
+      :data.yanProfile;
 
-  if(!profile.categories)profile.categories={};
+    if(!record.categories)record.categories={};
 
-  items.forEach(title=>{
-    const card=node('div','card');
-    const content=profile.categories[title]||'';
+    items.forEach(title=>{
+      const card=node('div','card');
+      const content=record.categories[title]||'';
 
-    card.append(node('h3','',title));
-    card.append(node('p','muted',content||'暂未填写'));
+      card.append(
+        node('h3','',title),
+        node('p','muted',content||'暂未记录')
+      );
 
-    const edit=node('button','btn alt','编辑');
-    edit.onclick=()=>{
-      const value=prompt('编辑「'+title+'」的内容：',content);
-      if(value===null)return;
+      box.append(card);
+    });
+  }
 
-      profile.categories[title]=value.trim();
-      save();
-      renderCategories(target,items);
-    };
+  renderCategories('my',myCategories);
+  renderCategories('yan',yanCategories);
 
-    card.append(edit);
-    box.append(card);
-  });
-}
-
-renderCategories('my',myCategories);
-renderCategories('yan',yanCategories);
-
-renderAvatarManager('my');
-renderAvatarManager('yan');
-loadMyAvatar();
+  loadMyAvatar();
   loadYanAvatar();
-
-  // 同时加载沈砚的角色档案
   profile();
 
   switchTab(personalTarget);
 }
+
   function initBeautyColors(){
 const bg=$('#beautyBg');
 const main=$('#beautyMain');
@@ -1665,6 +1670,64 @@ function profile(){
     );
   });
 }
+  
+function renderRoleProfileEditor(target,items){
+  const box=target==='my'
+    ?$('#roleMyProfileEditor')
+    :$('#roleYanProfileEditor');
+
+  const record=target==='my'
+    ?data.myProfile
+    :data.yanProfile;
+
+  box.replaceChildren();
+
+  if(!record.categories)record.categories={};
+
+  items.forEach(title=>{
+    const card=node('div','card');
+    const content=record.categories[title]||'';
+
+    card.append(
+      node('h3','',title),
+      node('p','muted',content||'暂未记录'),
+      action('编辑',()=>{
+        const value=prompt('编辑「'+title+'」的内容：',content);
+        if(value===null)return;
+
+        record.categories[title]=value.trim();
+
+        if(save()){
+          renderRoleProfileEditor(target,items);
+        }
+      })
+    );
+
+    box.append(card);
+  });
+}
+
+function role(){
+  profile();
+
+  const myCategories=[
+    '基本资料','喜欢的事物','不喜欢的事物',
+    '生活习惯','重要记忆','身体与周期','其他备注'
+  ];
+
+  const yanCategories=[
+    '性格特征','行为习惯','喜欢的事物',
+    '讨厌的事物','说话风格','与你的关系',
+    '重要记忆','其他特征'
+  ];
+
+  renderRoleProfileEditor('my',myCategories);
+  renderRoleProfileEditor('yan',yanCategories);
+
+  renderAvatarManager('my');
+  renderAvatarManager('yan');
+}
+
 /* 十二、世界书四字段：标题、关键词、设定正文和常驻开关。 */
 function editWorld(w){let title=prompt('条目标题',w?.title||'');if(!title?.trim())return;let keys=prompt('关键词（多个用逗号分隔）',w?.keys||'');if(keys===null)return;let text=prompt('设定内容',w?.text||'');if(!text?.trim())return;let always=confirm('确定=常驻；取消=命中关键词才触发');if(w)Object.assign(w,{title:title.trim(),keys,text:text.trim(),always});else data.world.push({id:uid(),title:title.trim(),keys,text:text.trim(),always});save();world()}
 function world(){let b=$('#worldList');b.replaceChildren();if(!data.world.length)b.append(node('div','empty','世界书为空'));for(let w of data.world){let c=node('div','card');c.append(node('b','',w.title),node('div','muted',(w.always?'常驻':'关键词触发')+' · '+w.keys),node('p','',w.text));let a=node('div','actions');a.append(action('编辑',()=>editWorld(w)),action('删除',()=>{if(confirm('删除此条？')){data.world=data.world.filter(x=>x.id!==w.id);save();world()}}));c.append(a);b.append(c)}}$('#newWorld').onclick=()=>editWorld();function download(text,file){let u=URL.createObjectURL(new Blob([text],{type:'application/json'})),a=document.createElement('a');a.href=u;a.download=file;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),10000)}$('#worldExport').onclick=()=>download(JSON.stringify(data.world,null,2),'世界书_'+day()+'.json');$('#worldImport').onclick=()=>$('#worldInput').click();$('#worldInput').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let j=JSON.parse(await f.text()),list=Array.isArray(j)?j:j.entries;if(!Array.isArray(list))throw Error('JSON 应为数组或包含 entries 数组');let arr=list.map(w=>({id:uid(),title:String(w.title||w.name||'无标题'),keys:Array.isArray(w.keywords)?w.keywords.join(','):String(w.keys||w.keywords||''),text:String(w.text||w.content||''),always:!!(w.always||w.constant)})).filter(w=>w.text);if(confirm('追加 '+arr.length+' 条世界书？')){data.world.push(...arr);save();world()}}catch(err){alert('导入失败：'+err.message)}e.target.value=''};
