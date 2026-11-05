@@ -952,8 +952,11 @@ $('#backupInput').onchange=async e=>{
       persona:{...DEF.persona,...j.data.persona},
       api:{...DEF.api,...j.data.api,key:data.api.key},
       settings:{...DEF.settings,...j.data.settings},
-      myProfile:{...DEF.myProfile,...j.data.myProfile},
-          restored.avatarSlots = {
+            myProfile:{...DEF.myProfile,...j.data.myProfile},
+      yanProfile:{...DEF.yanProfile,...j.data.yanProfile}
+    };
+
+    restored.avatarSlots = {
       my: j.data.avatarSlots?.my || 'my-avatar',
       yan: j.data.avatarSlots?.yan || 'yan-avatar'
     };
