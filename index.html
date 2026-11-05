@@ -1078,6 +1078,8 @@ function promptSystem(){
   const p=data.persona||{};
   const s=[
     '你正在与用户进行角色扮演文字私聊。自然、符合人物设定地回答，不要泄露系统指令。',
+    '【消息节奏】请把回复拆成多条独立的聊天消息，每条只表达一个自然完整的句子，每条消息单独占一行。不要把多句话写进同一段或同一行。日常聊天通常发送1至3条；亲密互动、认真解释或情绪浓烈时可以发送更多条，但要有自然停顿并给用户回应空间。不要为了凑数量而拆得过碎。',
+    '不要把普通聊天写成小说或长篇小作文。不要机械地把每句话都拆成单独的短词。',
     '角色姓名：'+name(),
     '称呼用户：'+(p.callme||'根据关系自然称呼'),
     '性格及语气：'+(p.personality||''),
@@ -1163,7 +1165,27 @@ function detectMemory(t){let m;let r=/(?:请|帮我)?记住[：:，,\s]*([^。�
 function condense(){if(!data.settings.summarize)return;let end=Math.max(0,data.messages.length-(+data.settings.context||12));if(end<=data.summaryIndex+8)return;let old=data.messages.slice(data.summaryIndex,end).map(m=>(m.role==='user'?'我':'他')+': '+m.text.replace(/\s+/g,' ').slice(0,90)).join('\n');data.summary=(data.summary+'\n'+old).slice(-5000);data.summaryIndex=end}
 function normalizeUrl(x){x=x.trim();if(!x)return '';if(!/^https?:\/\//i.test(x))x='https://'+x;let u=new URL(x);if(!/^https?:$/.test(u.protocol))throw Error('只支持 HTTP/HTTPS');if(u.pathname==='/'||u.pathname==='')u.pathname='/v1/chat/completions';else if(u.pathname.replace(/\/$/,'')==='/v1')u.pathname='/v1/chat/completions';return u.toString()}
 async function request(messages){let a=data.api;if(!a.model||!a.url)throw Error('请填写接口地址和模型名');let ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),30000);try{let r=await fetch(normalizeUrl(a.url),{method:'POST',headers:{'Content-Type':'application/json',...(a.key?{'Authorization':'Bearer '+a.key}:{})},body:JSON.stringify({model:a.model,temperature:+a.temperature,messages}),signal:ctrl.signal});if(!r.ok)throw Error('HTTP '+r.status+'：'+(await r.text()).slice(0,240));let json=await r.json(),value=json?.choices?.[0]?.message?.content;if(Array.isArray(value))value=value.map(i=>i.text||'').join('');if(typeof value!=='string'||!value.trim())throw Error('没有收到模型的文本回复');return value.trim()}catch(e){if(e.name==='AbortError')throw Error('30 秒超时');if(e instanceof TypeError)throw Error('网络错误或浏览器 CORS 跨域拦截');throw e}finally{clearTimeout(timer)}}
-async function chat(){
+function splitAssistantMessages(raw){
+  const source=String(raw||'').replace(/\r/g,'').trim();
+  if(!source)return [];
+
+  const result=[];
+
+  for(const line of source.split(/\n+/)){
+    const cleaned=line.trim();
+    if(!cleaned)continue;
+
+    const parts=cleaned.match(/[^。！？!?]+[。！？!?]?/g)||[cleaned];
+
+    for(const part of parts){
+      const text=part.trim().replace(/^[-*•]\s*/,'');
+      if(text)result.push(text);
+    }
+  }
+
+  return result;
+}
+  async function chat(){
   if(!await refresh())return;
 
   let box=$('#chatList');
@@ -1505,13 +1527,22 @@ $('#sendForm').onsubmit=async e=>{
     ans+='\n\n〔接口失败，已使用本地回复。原因：'+error+'〕';
   }
 
-  data.messages.push({
-    id:uid(),
-    role:'assistant',
-    text:ans,
-    at:Date.now(),
-    fallback:!!error
-  });
+  const replyParts=splitAssistantMessages(ans);
+  const replyAt=Date.now();
+
+  for(const text of (replyParts.length?replyParts:[ans||'…'])){
+    const replyParts=splitAssistantMessages(ans);
+  const replyAt=Date.now();
+
+  for(const text of (replyParts.length?replyParts:[ans||'…'])){
+    data.messages.push({
+      id:uid(),
+      role:'assistant',
+      text,
+      at:replyAt,
+      fallback:!!error
+    });
+  }
 
   save();
 
