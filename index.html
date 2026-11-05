@@ -377,16 +377,19 @@ let data={
 // API Key 独立保存，并迁移旧版本密钥
 const API_KEY_STORAGE='rp_phone_api_key_v1';
 
-try{
-  const storedKey=localStorage.getItem(API_KEY_STORAGE);
-  if(storedKey!==null){
-    data.api.key=storedKey;
-  }else if(data.api.key){
-    localStorage.setItem(API_KEY_STORAGE,data.api.key);
+
+try {
+  const storedKey = localStorage.getItem(API_KEY_STORAGE);
+
+  if (storedKey !== null) {
+    data.api.key = storedKey;
+  } else if (data.api.key) {
+    localStorage.setItem(API_KEY_STORAGE, data.api.key);
   }
-}  save();catch(e){
-  console.warn('API Key 独立保存失败',e);
+} catch (e) {
+  console.warn('API Key 独立保存失败', e);
 }
+
 for(let k of ['messages','memories','notes','moments','calls','world'])if(!Array.isArray(data[k]))data[k]=[];
 function save(){
   try{
