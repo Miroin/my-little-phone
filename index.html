@@ -430,6 +430,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
       <div id="myPersonalCategories"></div>
     </div>
 
+   
     <div id="yanPersonalCard" hidden>
       <div class="card center">
         <div class="avatar big" id="yanPersonalAvatar">♡</div>
@@ -438,8 +439,44 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
       </div>
       <div id="yanPersonalCategories"></div>
     </div>
+
+    <div class="card">
+      <h3>沈砚的角色档案</h3>
+      <p class="muted">管理他的性格、生活、记忆，以及我们之间的关系。</p>
+      <div id="integratedProfileContent" class="center"></div>
+    </div>
+
+    <div class="card">
+      <h3>角色设定</h3>
+      <p class="muted">编辑固定人设，让沈砚保持稳定的性格和表达方式。</p>
+      <button type="button" class="btn" data-go="persona">编辑人设卡</button>
+    </div>
+
+    <div class="card">
+      <h3>长期记忆</h3>
+      <p class="muted">保存共同经历，让角色拥有连续的生活背景。</p>
+      <button type="button" class="btn" data-go="memory">管理长期记忆</button>
+    </div>
+
+    <div class="card">
+      <h3>世界设定</h3>
+      <p class="muted">管理你们共同生活的背景与世界规则。</p>
+      <button type="button" class="btn" data-go="world">管理世界设定</button>
+    </div>
+
+    <div class="card">
+      <h3>关系与互动</h3>
+      <p class="muted">正式恋爱关系、亲密偏好、情绪与互动习惯。</p>
+      <p class="muted">后续会在这里加入关系档案和互动设置。</p>
+    </div>
+
+    <div class="card">
+      <h3>自主维护</h3>
+      <p class="muted">后续开放沈砚自主更新个人资料、共同回忆、关系记录与日常状态，并保留修改历史。</p>
+    </div>
   </main>
 </section>
+
 <section class="screen" id="memory"><header class="head"><button class="back" data-home>‹</button><b>长期记忆</b><button class="btn small" id="newMemory">添加</button></header><main class="body"><p class="muted">每次请求模型都会带上这些记忆。聊天时说“记住……”可以自动保存。</p><div id="memoryList"></div></main></section>
 <section class="screen" id="persona"><header class="head"><button class="back" data-home>‹</button><b>人设卡</b><button class="btn small" id="personaImport">导入角色卡</button><input hidden type="file" accept=".json,.txt,text/plain,application/json" id="personaInput"></header><main class="body"><form id="personaForm"><div id="personaFields"></div><button class="btn">保存并立即生效</button></form><p class="muted">支持常见 JSON 角色卡、以及“字段：内容”格式文本。无法识别的内容放进补充设定。</p></main></section>
 <section class="screen" id="world"><header class="head"><button class="back" data-home>‹</button><b>世界书</b><button class="btn small" id="newWorld">添加条目</button></header><main class="body"><div class="actions"><button class="btn alt small" id="worldImport">导入 JSON</button><button class="btn alt small" id="worldExport">导出 JSON</button><input hidden type="file" accept=".json,application/json" id="worldInput"></div><p class="muted">常驻条目一直发送，非驻留条目仅在最近消息命中关键词时发送。</p><div id="worldList"></div></main></section>
@@ -1038,8 +1075,11 @@ renderCategories('yan',yanCategories);
 renderAvatarManager('my');
 renderAvatarManager('yan');
 loadMyAvatar();
-loadYanAvatar();
-  
+  loadYanAvatar();
+
+  // 同时加载沈砚的角色档案
+  profile();
+
   switchTab(personalTarget);
 }
   function initBeautyColors(){
@@ -1602,7 +1642,29 @@ $('#recallNotesTab').onclick=()=>{
 };
 /* 十一、人设卡：完整表单、兼容常见 JSON 字段和纯文本导入。 */
 const P=[['name','他叫什么'],['callme','他怎么称呼我'],['personality','他的性子和说话方式'],['catchphrase','口头禅'],['taboo','绝不说的话（雷区）'],['first','开口第一句'],['extra','还要记住的别的事'],['birthday','生日'],['zodiac','星座'],['hobbies','爱好'],['signature','一句签名']];function persona(){let b=$('#personaFields');b.replaceChildren();for(let [k,label] of P){let d=node('div','field'),l=node('label','',label),inp=document.createElement(['name','callme','birthday','zodiac','hobbies'].includes(k)?'input':'textarea');inp.id='p_'+k;inp.value=data.persona[k]||'';d.append(l,inp);b.append(d)}}$('#personaForm').onsubmit=e=>{e.preventDefault();for(let[k]of P)data.persona[k]=$('#p_'+k).value;save();home();alert('人设已保存，下一次对话生效')};$('#personaImport').onclick=()=>$('#personaInput').click();$('#personaInput').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let t=await f.text(),obj={};if(f.name.endsWith('.json')||t.trim().startsWith('{')){let x=JSON.parse(t);x=x.data||x.character||x;let alias={name:['name','角色名'],callme:['callme','nickname','称呼'],personality:['personality','description','性格'],catchphrase:['catchphrase','口头禅'],taboo:['taboo','雷区'],first:['first','first_mes','first_message','opening'],extra:['extra','scenario','system_prompt','补充设定'],birthday:['birthday'],zodiac:['zodiac'],hobbies:['hobbies'],signature:['signature']};for(let [k,keys]of Object.entries(alias))for(let key of keys)if(x[key]!=null){obj[k]=typeof x[key]==='string'?x[key]:JSON.stringify(x[key]);break}if(!Object.keys(obj).length)obj.extra=t}else{let aliases={'姓名':'name','名字':'name','角色名':'name','称呼':'callme','性格':'personality','说话方式':'personality','口头禅':'catchphrase','雷区':'taboo','开场白':'first','第一句':'first','补充设定':'extra','生日':'birthday','星座':'zodiac','爱好':'hobbies','签名':'signature'};let other=[];for(let line of t.split(/\r?\n/)){let m=line.match(/^\s*([^:：]{1,18})[:：]\s*(.*)$/);if(m&&aliases[m[1].trim()])obj[aliases[m[1].trim()]]=m[2];else other.push(line)}if(other.join('').trim())obj.extra=(obj.extra||'')+'\n'+other.join('\n')}Object.assign(data.persona,obj);save();persona();alert('已导入人设，请检查所有字段')}catch(err){alert('人设导入失败：'+err.message)}e.target.value=''};
-function profile(){let p=data.persona,b=$('#profileContent');b.replaceChildren();b.append(node('div','avatar big',avatar()),node('h2','',name()),node('p','',p.signature||'暂无签名'),node('p','','生日：'+(p.birthday||'未填写')),node('p','','星座：'+(p.zodiac||'未填写')),node('p','','爱好：'+(p.hobbies||'未填写')))}
+function profile(){
+  const p=data.persona;
+
+  const targets=[
+    $('#profileContent'),
+    $('#integratedProfileContent')
+  ];
+
+  targets.forEach(b=>{
+    if(!b)return;
+
+    b.replaceChildren();
+
+    b.append(
+      node('div','avatar big',avatar()),
+      node('h2','',name()),
+      node('p','',p.signature||'暂无签名'),
+      node('p','','生日：'+(p.birthday||'未填写')),
+      node('p','','星座：'+(p.zodiac||'未填写')),
+      node('p','','爱好：'+(p.hobbies||'未填写'))
+    );
+  });
+}
 /* 十二、世界书四字段：标题、关键词、设定正文和常驻开关。 */
 function editWorld(w){let title=prompt('条目标题',w?.title||'');if(!title?.trim())return;let keys=prompt('关键词（多个用逗号分隔）',w?.keys||'');if(keys===null)return;let text=prompt('设定内容',w?.text||'');if(!text?.trim())return;let always=confirm('确定=常驻；取消=命中关键词才触发');if(w)Object.assign(w,{title:title.trim(),keys,text:text.trim(),always});else data.world.push({id:uid(),title:title.trim(),keys,text:text.trim(),always});save();world()}
 function world(){let b=$('#worldList');b.replaceChildren();if(!data.world.length)b.append(node('div','empty','世界书为空'));for(let w of data.world){let c=node('div','card');c.append(node('b','',w.title),node('div','muted',(w.always?'常驻':'关键词触发')+' · '+w.keys),node('p','',w.text));let a=node('div','actions');a.append(action('编辑',()=>editWorld(w)),action('删除',()=>{if(confirm('删除此条？')){data.world=data.world.filter(x=>x.id!==w.id);save();world()}}));c.append(a);b.append(c)}}$('#newWorld').onclick=()=>editWorld();function download(text,file){let u=URL.createObjectURL(new Blob([text],{type:'application/json'})),a=document.createElement('a');a.href=u;a.download=file;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),10000)}$('#worldExport').onclick=()=>download(JSON.stringify(data.world,null,2),'世界书_'+day()+'.json');$('#worldImport').onclick=()=>$('#worldInput').click();$('#worldInput').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let j=JSON.parse(await f.text()),list=Array.isArray(j)?j:j.entries;if(!Array.isArray(list))throw Error('JSON 应为数组或包含 entries 数组');let arr=list.map(w=>({id:uid(),title:String(w.title||w.name||'无标题'),keys:Array.isArray(w.keywords)?w.keywords.join(','):String(w.keys||w.keywords||''),text:String(w.text||w.content||''),always:!!(w.always||w.constant)})).filter(w=>w.text);if(confirm('追加 '+arr.length+' 条世界书？')){data.world.push(...arr);save();world()}}catch(err){alert('导入失败：'+err.message)}e.target.value=''};
