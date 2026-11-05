@@ -1252,7 +1252,10 @@ $('#stickerInput').onchange=async e=>{
   forgetUrls();
   await renderStickerLibrary();
 };
-let busy=false;$('#sendForm').onsubmit=async e=>{e.preventDefault();let t=$('#message').value.trim();if(!t||busy)return;busy=true;$('#message').value='';data.messages.push({id:uid(),role:'user',text:t,at:Date.now()});detectMemory(t);condense();save();chat();$('#typing').classList.add('on');let ans='',error='',start=Date.now();try{if(data.api.mode==='api')ans=await request([{role:'system',content:promptSystem()},...lastMsgs().map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}))]);else ans=localAnswer(t)}catch(ex){error=ex.message;ans=localAnswer(t)}let rest=650-(Date.now()-start);if(rest>0)await new Promise(r=>setTimeout(r,rest));if(error)ans+='\n\n〔接口失败，已使用本地回复。原因：'+error+'〕';data.messages.push({id:uid(),role:'assistant',text:ans,at:Date.now(),fallback:!!error});save();busy=false;$('#typing').classList.remove('on');chat()};$('#message').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('#sendForm').requestSubmit()}};
+let busy=false;$('#sendForm').onsubmit=async e=>{e.preventDefault();let t=$('#message').value.trim();if(!t||busy)return;busy=true;$('#message').value='';data.messages.push({id:uid(),role:'user',text:t,at:Date.now()});detectMemory(t);condense();save();chat();$('#typing').classList.add('on');let ans='',error='',start=Date.now();try{if(data.api.mode==='api')ans=await request([{role:'system',content:promptSystem()},...lastMsgs().map(m=>({
+  role:m.role==='user'?'user':'assistant',
+  content:m.text||(m.stickerId?'[发送了表情包：'+(m.stickerName||'表情包')+']':'')
+}))]);else ans=localAnswer(t)}catch(ex){error=ex.message;ans=localAnswer(t)}let rest=650-(Date.now()-start);if(rest>0)await new Promise(r=>setTimeout(r,rest));if(error)ans+='\n\n〔接口失败，已使用本地回复。原因：'+error+'〕';data.messages.push({id:uid(),role:'assistant',text:ans,at:Date.now(),fallback:!!error});save();busy=false;$('#typing').classList.remove('on');chat()};$('#message').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('#sendForm').requestSubmit()}};
 $('#clearChat').onclick=()=>{if(confirm('清空全部聊天（不清除长期记忆）？')){data.messages=[];data.summary='';data.summaryIndex=0;save();chat()}};
 /* 六、朋友圈：文本、可选相册图片、点赞、时间和删除。 */
 async function moments(){ if(!await refresh())return;let box=$('#momentsList');box.replaceChildren();if(!data.moments.length)box.append(node('div','empty','还没有动态'));for(let x of data.moments){let c=node('div','card'),heading=node('div','row');heading.append(node('div','avatar',avatar()),node('b','',name()));c.append(heading,node('p','',x.text),node('div','time',date(x.at)));let pic=media.find(m=>m.id===x.photo);if(pic){let im=node('img','postpic');im.src=objectUrl(pic);c.append(im)}let a=node('div','actions');a.append(action(x.liked?'♥ 已赞':'♡ 点赞',()=>{x.liked=!x.liked;save();moments()}),action('删除',()=>{if(confirm('删除动态？')){data.moments=data.moments.filter(m=>m.id!==x.id);save();moments()}}));c.append(a);box.append(c)}}
@@ -1323,7 +1326,7 @@ async function stats(){
 
   $('#statistics').textContent=
     '消息 '+data.messages.length+' 条 · 记忆 '+data.memories.length+' 条 · 世界书 '+data.world.length+' 条\n'+
-    '照片 '+items.filter(x=>x.kind==='photo').length+' 张 · 音乐 '+items.filter(x=>x.kind==='music').length+' 首\n'+
+   '照片 '+items.filter(x=>x.kind==='photo').length+' 张 · 音乐 '+items.filter(x=>x.kind==='music').length+' 首 · 表情包 '+items.filter(x=>x.kind==='sticker').length+' 张\n'+
     '占用约 '+(bytes/1048576).toFixed(2)+' MB（不含数据库额外开销）';
 }
 $('#backupOut').onclick=async()=>{
@@ -1409,7 +1412,7 @@ $('#backupInput').onchange=async e=>{
     }
 
     const list=j.media
-      .filter(m=>['photo','music','avatar','lock-wallpaper'].includes(m.kind))
+     .filter(m=>['photo','music','avatar','lock-wallpaper','sticker'].includes(m.kind))
       .map(m=>({
         id:m.id,
         kind:m.kind,
