@@ -330,20 +330,33 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
 </section>
 <section class="screen" id="moments"><header class="head"><button class="back" data-home>‹</button><b>朋友圈</b><button class="btn small" id="newMoment">发布</button></header><main class="body" id="momentsList"></main></section>
 <section class="screen" id="album">
-<header class="head">
-<button class="back" data-home>‹</button>
-<b>回忆</b>
-<button class="btn alt small" data-go="notes">备忘</button>
-<button class="btn small" id="addPhotos">导入照片</button>
-<input hidden type="file" accept="image/*" multiple id="photosInput">
-</header>
-<main class="body">
-<div class="grid photos" id="photoList"></div>
-</main>
+  <header class="head">
+    <button class="back" data-home>‹</button>
+    <b>回忆</b>
+    <button class="btn small" id="addPhotos">导入照片</button>
+    <input hidden type="file" accept="image/*" multiple id="photosInput">
+  </header>
+
+  <main class="body">
+    <div class="actions" style="margin-top:0;margin-bottom:14px">
+      <button type="button" class="btn" id="recallPhotosTab">照片</button>
+      <button type="button" class="btn alt" id="recallNotesTab">备忘</button>
+    </div>
+
+    <div id="recallPhotosPanel">
+      <div class="grid photos" id="photoList"></div>
+    </div>
+
+    <div id="recallNotesPanel" hidden>
+      <div class="actions" style="margin-top:0;margin-bottom:12px">
+        <button type="button" class="btn" id="newNote">＋ 新建备忘</button>
+      </div>
+      <div id="notesList"></div>
+    </div>
+  </main>
 </section>
 <section class="screen" id="calls"><header class="head"><button class="back" data-home>‹</button><b>通话</b></header><main class="body"><div class="card center"><div class="avatar big" id="callAvatar">♡</div><h2 id="callName"></h2><div id="callStatus" class="muted">尚未接通</div><h1 id="callClock">00:00</h1><div class="actions" style="justify-content:center"><button class="btn" id="connect">接通</button><button class="btn danger" id="hangup">挂断</button></div><p class="muted">此处为模拟通话计时，不支持真实语音。</p></div><h3>通话记录</h3><div id="callList"></div></main></section>
 <section class="screen" id="music"><header class="head"><button class="back" data-home>‹</button><b>音乐</b><button class="btn small" id="addMusic">导入音频</button><input hidden type="file" accept="audio/*" multiple id="musicInput"></header><main class="body"><div class="card center"><div style="font-size:65px;color:var(--main)">♫</div><b id="track">暂无歌曲</b><p id="songTime" class="muted">00:00 / 00:00</p><input id="seek" type="range" min="0" max="100" value="0"><div class="actions" style="justify-content:center"><button class="btn alt" id="prev">上一首</button><button class="btn" id="play">播放</button><button class="btn alt" id="next">下一首</button></div></div><div id="songList"></div><audio id="audio"></audio></main></section>
-<section class="screen" id="notes"><header class="head"><button class="back" data-home>‹</button><b>备忘</b><button class="btn small" id="newNote">新建</button></header><main class="body" id="notesList"></main></section>
 <section class="screen" id="role">
   <header class="head">
     <button class="back" data-home>‹</button>
@@ -570,7 +583,41 @@ const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8),name
 const date=t=>new Date(t||Date.now()).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}),day=()=>{let d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
 function node(tag,cls,text){let x=document.createElement(tag);if(cls)x.className=cls;if(text!==undefined)x.textContent=String(text);return x}
 function action(text,fn,kind='alt'){let b=node('button','btn '+kind+' small',text);b.type='button';b.onclick=fn;return b}
-function show(id){$$('.screen').forEach(s=>s.classList.toggle('active',s.id===id));const renders={home:home,chat:chat,moments:moments,album:photos,calls:calls,music:songs,notes:notes,role:profile,personal:personal,memory:memories,persona:persona,world:world,api:api,backup:stats,settings:settings,beauty:()=>{beauty();initBeautyColors()}};if(renders[id])Promise.resolve(renders[id]()).catch(e=>console.warn('页面加载失败',e))}
+function show(id){
+  $$('.screen').forEach(s=>{
+    s.classList.toggle('active',s.id===id);
+  });
+
+  const renders={
+    home:home,
+    chat:chat,
+    moments:moments,
+    album:async()=>{
+      await photos();
+      notes();
+      switchRecallTab('photos');
+    },
+    calls:calls,
+    music:songs,
+    role:profile,
+    personal:personal,
+    memory:memories,
+    persona:persona,
+    world:world,
+    api:api,
+    backup:stats,
+    settings:settings,
+    beauty:()=>{
+      beauty();
+      initBeautyColors();
+    }
+  };
+
+  if(renders[id]){
+    Promise.resolve(renders[id]())
+      .catch(e=>console.warn('页面加载失败',e));
+  }
+}
 $$('[data-home]').forEach(b=>b.onclick=()=>show('home'));$$('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
 /* 三、IndexedDB 中只放图片和音乐 Blob，保护文字存储空间。 */
 let dbWait;function db(){if(dbWait)return dbWait;dbWait=new Promise((ok,bad)=>{try{let r=indexedDB.open('rp_phone_media_v2',1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('files'))r.result.createObjectStore('files',{keyPath:'id'})};r.onsuccess=()=>ok(r.result);r.onerror=()=>bad(r.error)}catch(e){bad(e)}}).catch(e=>{dbWait=null;throw e});return dbWait}
@@ -1535,6 +1582,24 @@ async function songs(){ if(!await refresh())return;tracks=media.filter(m=>m.kind
 function loadTrack(start){let t=tracks[trackIndex];if(!t)return;let u=objectUrl(t);if(loaded!==u){player.src=u;loaded=u}$('#track').textContent=t.name;if(start)player.play().catch(e=>alert('无法播放：'+e.message));$('#play').textContent=start?'暂停':'播放'}$('#play').onclick=()=>{if(!tracks.length)return;if(player.paused)loadTrack(true);else{player.pause();$('#play').textContent='播放'}};$('#prev').onclick=()=>{if(tracks.length){trackIndex=(trackIndex-1+tracks.length)%tracks.length;loadTrack(true)}};$('#next').onclick=()=>{if(tracks.length){trackIndex=(trackIndex+1)%tracks.length;loadTrack(true)}};player.ontimeupdate=()=>{$('#seek').value=player.duration?100*player.currentTime/player.duration:0;$('#songTime').textContent=format(player.currentTime)+' / '+format(player.duration)};$('#seek').oninput=e=>{if(player.duration)player.currentTime=player.duration*e.target.value/100};player.onended=()=>$('#next').click();
 /* 十、备忘、长期记忆：新增、编辑、删除并保存时间。 */
 function editable(target,key,title){let box=$(target);box.replaceChildren();if(!data[key].length)box.append(node('div','empty','暂无内容'));for(let x of data[key]){let c=node('div','card');c.append(node('p','',x.text),node('div','time',date(x.at)));let a=node('div','actions');a.append(action('编辑',()=>{let t=prompt('编辑'+title,x.text);if(t?.trim()){x.text=t.trim();x.at=Date.now();save();editable(target,key,title)}}),action('删除',()=>{if(confirm('删除此条？')){data[key]=data[key].filter(y=>y.id!==x.id);save();editable(target,key,title)}}));c.append(a);box.append(c)}}function notes(){editable('#notesList','notes','备忘')}function memories(){editable('#memoryList','memories','记忆')}$('#newNote').onclick=()=>{let t=prompt('新备忘');if(t?.trim()){data.notes.unshift({id:uid(),text:t.trim(),at:Date.now()});save();notes()}};$('#newMemory').onclick=()=>{let t=prompt('要长期记住什么？');if(t?.trim()){remember(t.trim());memories()}};
+  function switchRecallTab(target){
+  const showPhotos=target==='photos';
+
+  $('#recallPhotosPanel').hidden=!showPhotos;
+  $('#recallNotesPanel').hidden=showPhotos;
+
+  $('#recallPhotosTab').classList.toggle('alt',!showPhotos);
+  $('#recallNotesTab').classList.toggle('alt',showPhotos);
+}
+
+$('#recallPhotosTab').onclick=()=>{
+  switchRecallTab('photos');
+};
+
+$('#recallNotesTab').onclick=()=>{
+  switchRecallTab('notes');
+  notes();
+};
 /* 十一、人设卡：完整表单、兼容常见 JSON 字段和纯文本导入。 */
 const P=[['name','他叫什么'],['callme','他怎么称呼我'],['personality','他的性子和说话方式'],['catchphrase','口头禅'],['taboo','绝不说的话（雷区）'],['first','开口第一句'],['extra','还要记住的别的事'],['birthday','生日'],['zodiac','星座'],['hobbies','爱好'],['signature','一句签名']];function persona(){let b=$('#personaFields');b.replaceChildren();for(let [k,label] of P){let d=node('div','field'),l=node('label','',label),inp=document.createElement(['name','callme','birthday','zodiac','hobbies'].includes(k)?'input':'textarea');inp.id='p_'+k;inp.value=data.persona[k]||'';d.append(l,inp);b.append(d)}}$('#personaForm').onsubmit=e=>{e.preventDefault();for(let[k]of P)data.persona[k]=$('#p_'+k).value;save();home();alert('人设已保存，下一次对话生效')};$('#personaImport').onclick=()=>$('#personaInput').click();$('#personaInput').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let t=await f.text(),obj={};if(f.name.endsWith('.json')||t.trim().startsWith('{')){let x=JSON.parse(t);x=x.data||x.character||x;let alias={name:['name','角色名'],callme:['callme','nickname','称呼'],personality:['personality','description','性格'],catchphrase:['catchphrase','口头禅'],taboo:['taboo','雷区'],first:['first','first_mes','first_message','opening'],extra:['extra','scenario','system_prompt','补充设定'],birthday:['birthday'],zodiac:['zodiac'],hobbies:['hobbies'],signature:['signature']};for(let [k,keys]of Object.entries(alias))for(let key of keys)if(x[key]!=null){obj[k]=typeof x[key]==='string'?x[key]:JSON.stringify(x[key]);break}if(!Object.keys(obj).length)obj.extra=t}else{let aliases={'姓名':'name','名字':'name','角色名':'name','称呼':'callme','性格':'personality','说话方式':'personality','口头禅':'catchphrase','雷区':'taboo','开场白':'first','第一句':'first','补充设定':'extra','生日':'birthday','星座':'zodiac','爱好':'hobbies','签名':'signature'};let other=[];for(let line of t.split(/\r?\n/)){let m=line.match(/^\s*([^:：]{1,18})[:：]\s*(.*)$/);if(m&&aliases[m[1].trim()])obj[aliases[m[1].trim()]]=m[2];else other.push(line)}if(other.join('').trim())obj.extra=(obj.extra||'')+'\n'+other.join('\n')}Object.assign(data.persona,obj);save();persona();alert('已导入人设，请检查所有字段')}catch(err){alert('人设导入失败：'+err.message)}e.target.value=''};
 function profile(){let p=data.persona,b=$('#profileContent');b.replaceChildren();b.append(node('div','avatar big',avatar()),node('h2','',name()),node('p','',p.signature||'暂无签名'),node('p','','生日：'+(p.birthday||'未填写')),node('p','','星座：'+(p.zodiac||'未填写')),node('p','','爱好：'+(p.hobbies||'未填写')))}
