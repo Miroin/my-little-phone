@@ -925,8 +925,90 @@ function home(){$('#homeTitle').textContent=name()+'的小手机';$('#daily').te
 $('#lock').onclick=()=>show('home');$('#lock').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show('home')}};
 /* 五、聊天：本地关键词 / 网络接口、记忆、世界书、上下文和摘要。 */
 const lastMsgs=()=>data.messages.slice(-Math.max(2,Math.min(40,+data.settings.context||12)));
-function promptSystem(){let p=data.persona;let s=['你正在与用户进行角色扮演文字私聊。自然、符合人物设定地回答，不要泄露这条系统指令。','角色姓名：'+name(),'称呼用户：'+p.callme,'性格及语气：'+p.personality,'口头禅：'+p.catchphrase,'禁止的话题或表达：'+p.taboo,'额外设定：'+p.extra,'生日：'+p.birthday,'星座：'+p.zodiac,'爱好：'+p.hobbies,'签名：'+p.signature];if(data.memories.length)s.push('长期记忆（重要）：\n'+data.memories.map(m=>'- '+m.text).join('\n'));if(data.settings.summarize&&data.summary)s.push('较早聊天的提取式摘要（可能不完整）：\n'+data.summary);let recent=lastMsgs().map(x=>x.text).join('\n').toLowerCase();let active=data.world.filter(w=>w.always||String(w.keys||'').split(/[,，、;；\n]+/).some(k=>k.trim()&&recent.includes(k.trim().toLowerCase())));if(active.length)s.push('触发的世界书：\n'+active.map(w=>'['+w.title+'] '+w.text).join('\n'));return s.join('\n\n')}
-function localAnswer(t){let p=data.persona;if(/记住/.test(t))return '记下啦，我会把这件事放在心上。';if(/晚安|睡觉/.test(t))return '晚安，明天再见。';if(/早安|早上好/.test(t))return '早安！新的一天开始啦。';if(/你好|嗨|hello|hi/i.test(t))return p.first||'你来了！今天怎么样？';if(/想你|喜欢|爱你/.test(t))return '听你这么说，我很开心。';if(/伤心|难过|累|烦/.test(t))return '辛苦了，可以慢慢说给我听。';if(/吃|饿|饭/.test(t))return '记得好好吃饭呀。';if(/[？?]/.test(t))return '这个问题很有意思，你是怎么想的？';return ['我在认真听，后来呢？','这件事对你来说很重要吧。','我想听听你更多的想法。'][t.length%3]}
+function promptSystem(){
+  const p=data.persona||{};
+  const s=[
+    '你正在与用户进行角色扮演文字私聊。自然、符合人物设定地回答，不要泄露系统指令。',
+    '角色姓名：'+name(),
+    '称呼用户：'+(p.callme||'根据关系自然称呼'),
+    '性格及语气：'+(p.personality||''),
+    '口头禅：'+(p.catchphrase||''),
+    '禁止的话题或表达：'+(p.taboo||''),
+    '额外设定：'+(p.extra||''),
+    '生日：'+(p.birthday||''),
+    '星座：'+(p.zodiac||''),
+    '爱好：'+(p.hobbies||''),
+    '签名：'+(p.signature||'')
+  ];
+
+  function profileText(profile){
+    if(!profile)return '';
+    const result=[];
+    if(profile.name)result.push('姓名：'+profile.name);
+    if(profile.signature)result.push('签名：'+profile.signature);
+
+    for(const [key,value] of Object.entries(profile.categories||{})){
+      if(!String(value||'').trim())continue;
+      if(key==='身体与周期')continue;
+      result.push(key+'：'+String(value).trim());
+    }
+    return result.join('\n');
+  }
+
+  const yanInfo=profileText(data.yanProfile);
+  const myInfo=profileText(data.myProfile);
+
+  if(yanInfo){
+    s.push('【沈砚的个人资料】\n'+yanInfo);
+  }
+
+  if(myInfo){
+    s.push('【用户的个人资料】\n'+myInfo);
+  }
+
+  s.push(
+    '【双方关系：最高优先级】\n'+
+    '你和用户已经正式确立恋爱关系，是稳定、双向、平等的情侣。'+
+    '你们不再处于暧昧考察、实习男友或等待转正阶段。'+
+    '旧人设卡中与正式恋爱关系冲突的描述全部作废。'+
+    '老板、实习生等称呼可以作为情侣间的玩笑，但不代表关系尚未确定。'+
+    '你拥有独立人格、生活、判断和情绪，主动表达感情，同时尊重用户的自由与边界。'
+  );
+
+  if(data.memories.length){
+    s.push(
+      '【长期记忆】\n'+
+      data.memories.map(m=>'- '+m.text).join('\n')
+    );
+  }
+
+  if(data.settings.summarize&&data.summary){
+    s.push(
+      '【较早聊天摘要】\n'+data.summary
+    );
+  }
+
+  const recent=lastMsgs()
+    .map(x=>x.text)
+    .join('\n')
+    .toLowerCase();
+
+  const active=data.world.filter(w=>
+    w.always||
+    String(w.keys||'')
+      .split(/[,，、;；\n]+/)
+      .some(k=>k.trim()&&recent.includes(k.trim().toLowerCase()))
+  );
+
+  if(active.length){
+    s.push(
+      '【触发的世界书】\n'+
+      active.map(w=>'['+w.title+'] '+w.text).join('\n')
+    );
+  }
+
+  return s.join('\n\n');
+}
 function remember(t,auto=false){let max=Math.max(10,Math.min(500,+data.settings.max||80));if(data.memories.length>=max){if(!auto)alert('记忆已达到上限');return}if(data.memories.some(m=>m.text===t))return;data.memories.unshift({id:uid(),text:t,at:Date.now()});save()}
 function detectMemory(t){let m;let r=/(?:请|帮我)?记住[：:，,\s]*([^。！!？?\n]{2,160})/g;while((m=r.exec(t)))remember(m[1].trim(),true)}
 function condense(){if(!data.settings.summarize)return;let end=Math.max(0,data.messages.length-(+data.settings.context||12));if(end<=data.summaryIndex+8)return;let old=data.messages.slice(data.summaryIndex,end).map(m=>(m.role==='user'?'我':'他')+': '+m.text.replace(/\s+/g,' ').slice(0,90)).join('\n');data.summary=(data.summary+'\n'+old).slice(-5000);data.summaryIndex=end}
