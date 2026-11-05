@@ -503,11 +503,10 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
     </div>
   </main>
 </section>
-<section class="screen" id="settings"><header class="head"><button class="back" data-home>‹</button><b>设置</b></header><main class="body"><form id="settingsForm"><div class="field"><label>显示名字（覆盖人设名字）</label><input id="displayName"></div><div class="field"><label>桌面底部小字</label><input id="footerText"></div><div class="field"><label>配色</label><select id="theme"><option value="pink">浅粉淡紫</option><option value="lavender">薰衣草紫</option><option value="cream">奶油色</option><option value="dark">夜色</option></select></div><div class="field"><label>最近聊天带几条（2–40）</label><input id="context" type="number" min="2" max="40"></div><div class="field"><label class="switch">自动摘要旧聊天 <input id="summaryOn" type="checkbox"></label></div><div class="field"><label>长期记忆上限（10–500）</label><input id="memoryMax" type="number" min="10" max="500"></div><div class="field"><label class="switch">跨天打开时补发主动消息 <input id="proactive" type="checkbox"></label></div><div class="actions">
+<section class="screen" id="settings"><header class="head"><button class="back" data-home>‹</button><b>设置</b></header><main class="body"><form id="settingsForm"><div class="field"><label>显示名字（覆盖人设名字）</label><input id="displayName"></div><div class="field"><label>桌面底部小字</label><input id="footerText"></div><div class="field"><label>最近聊天带几条（2–40）</label><input id="context" type="number" min="2" max="40"></div><div class="field"><label class="switch">自动摘要旧聊天 <input id="summaryOn" type="checkbox"></label></div><div class="field"><label>长期记忆上限（10–500）</label><input id="memoryMax" type="number" min="10" max="500"></div><div class="field"><label class="switch">跨天打开时补发主动消息 <input id="proactive" type="checkbox"></label></div><div class="actions">
 <button class="btn">保存设置</button>
 <button type="button" class="btn alt" data-go="api">接口与模型</button>
 <button type="button" class="btn alt" data-go="backup">备份与恢复</button>
-<button type="button" class="btn alt" data-go="beauty">🎨 美化中心</button>
 </div></form></main></section>
 <div class="preview" id="preview"><img id="previewImg" alt="预览"><div class="actions"><button class="btn alt" id="closePreview">关闭</button><button class="btn danger" id="deletePreview">删除</button></div></div>
 </div><script>
@@ -933,7 +932,6 @@ function applyBeautyTheme(key){
   if(!colors[key])return;
   data.settings.theme=key;
   data.settings.customColors={};
-  $('#theme').value=key;
   save();
   theme();
 }
@@ -1794,8 +1792,35 @@ function api(){$('#mode').value=data.api.mode;$('#endpoint').value=data.api.url;
   }
 }$('#apiForm').onsubmit=e=>{e.preventDefault();try{if($('#endpoint').value.trim())$('#endpoint').value=normalizeUrl($('#endpoint').value);readApi();alert('已保存接口设置')}catch(ex){alert('地址不正确：'+ex.message)}};$('#test').onclick=async()=>{readApi();$('#testResult').textContent='测试中…';try{let ans=await request([{role:'user',content:'你好，请用一句话问候我。'}]);$('#testResult').textContent='连接成功！\n'+ans}catch(e){$('#testResult').textContent='测试失败：'+e.message}};
 /* 十四、设置：名字、底部文字、主题、上下文条数、摘要和记忆上限。 */
-function settings(){let s=data.settings;$('#displayName').value=s.name;$('#footerText').value=s.footer;$('#theme').value=s.theme;$('#context').value=s.context;$('#summaryOn').checked=s.summarize;$('#memoryMax').value=s.max;$('#proactive').checked=s.proactive}$('#settingsForm').onsubmit=e=>{e.preventDefault();data.settings={name:$('#displayName').value.trim(),footer:$('#footerText').value,theme:$('#theme').value,customColors:data.settings.customColors,context:Math.max(2,Math.min(40,+$('#context').value||12)),summarize:$('#summaryOn').checked,max:Math.max(10,Math.min(500,+$('#memoryMax').value||80)),proactive:$('#proactive').checked};save();theme();home();alert('设置已保存')};
-/* 十五、备份包含文字 JSON 和 IndexedDB 的二进制媒体（base64）。 */
+function settings(){
+  let s=data.settings;
+  $('#displayName').value=s.name;
+  $('#footerText').value=s.footer;
+  $('#context').value=s.context;
+  $('#summaryOn').checked=s.summarize;
+  $('#memoryMax').value=s.max;
+  $('#proactive').checked=s.proactive;
+}
+
+$('#settingsForm').onsubmit=e=>{
+  e.preventDefault();
+
+  data.settings={
+    name:$('#displayName').value.trim(),
+    footer:$('#footerText').value,
+    theme:data.settings.theme,
+    customColors:data.settings.customColors,
+    context:Math.max(2,Math.min(40,+$('#context').value||12)),
+    summarize:$('#summaryOn').checked,
+    max:Math.max(10,Math.min(500,+$('#memoryMax').value||80)),
+    proactive:$('#proactive').checked
+  };
+
+  save();
+  theme();
+  home();
+  alert('设置已保存');
+};
 function blob64(blob){return new Promise((ok,bad)=>{let reader=new FileReader();reader.onload=()=>ok(String(reader.result).split(',')[1]);reader.onerror=()=>bad(reader.error);reader.readAsDataURL(blob)})}function from64(x,type){let raw=atob(x),part=[];for(let i=0;i<raw.length;i+=8192){let slice=raw.slice(i,i+8192),arr=new Uint8Array(slice.length);for(let j=0;j<slice.length;j++)arr[j]=slice.charCodeAt(j);part.push(arr)}return new Blob(part,{type:type||'application/octet-stream'})}
 async function stats(){
   const items=await mediaAll();
