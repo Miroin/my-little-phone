@@ -425,7 +425,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
     </div>
   </main>
 </section>
-<section class="screen" id="memory"><header class="head"><button class="back" data-home>‹</button><b>长期记忆</b><button class="btn small" id="newMemory">添加</button></header><main class="body"><p class="muted">每次请求模型都会带上这些记忆。聊天时说“记住……”可以自动保存。</p><div id="memoryList"></div></main></section>
+<section class="screen" id="memory"><header class="head"><button class="back" data-home>‹</button><b>长期记忆</b><button class="btn small" id="newMemory">添加</button></header><main class="body"><p class="muted">记忆会自动分类、去重，并按当前话题检索。固定人设不会被普通聊天覆盖。</p><div class="card"><div class="row"><select id="memoryFilter" class="grow"><option value="">全部分类</option><option>用户资料</option><option>用户偏好</option><option>共同经历</option><option>角色经历</option><option>约定计划</option><option>其他</option></select><input id="memorySearch" class="grow" placeholder="搜索记忆"></div></div><div id="memoryList"></div></main></section>
 <section class="screen" id="persona"><header class="head"><button class="back" data-home>‹</button><b>人设卡</b><button class="btn small" id="personaImport">导入角色卡</button><input hidden type="file" accept=".json,.txt,text/plain,application/json" id="personaInput"></header><main class="body"><form id="personaForm"><div id="personaFields"></div><button class="btn">保存并立即生效</button></form><p class="muted">支持 JSON 角色卡及“字段：内容”文本。人物档案按六大分类展示，可在下方编辑并保存。</p></main></section>
 <section class="screen" id="world"><header class="head"><button class="back" data-home>‹</button><b>世界书</b><button class="btn small" id="newWorld">添加条目</button></header><main class="body"><div class="actions"><button class="btn alt small" id="worldImport">导入 JSON</button><button class="btn alt small" id="worldExport">导出 JSON</button><input hidden type="file" accept=".json,application/json" id="worldInput"></div><p class="muted">常驻条目一直发送，非驻留条目仅在最近消息命中关键词时发送。</p><div id="worldList"></div></main></section>
 <section class="screen" id="api"><header class="head"><button class="back" data-home>‹</button><b>接口</b></header><main class="body"><form id="apiForm"><div class="field"><label>模式</label><select id="mode"><option value="local">本地关键词（完全离线）</option><option value="api">接口模型</option></select></div><div class="field"><label>接口地址</label><input id="endpoint" placeholder="https://example.com/v1/chat/completions"></div><div class="field"><label>模型名</label><input id="model" placeholder="请填真实模型名"></div><div class="field"><label>钥匙（仅保存在此浏览器；不加密）</label><input id="key" type="password" autocomplete="off"></div><div class="field"><label>随机性 <span id="temperatureText"></span></label><input id="temperature" type="range" min="0" max="2" step="0.1"></div><div class="actions"><button class="btn">保存</button><button class="btn alt" type="button" id="test">测一下</button></div></form><p class="card" id="testResult">测试会发一句问候，不写入聊天。</p><p class="muted">要求 OpenAI 兼容 chat/completions 接口。部分服务商会因 CORS 浏览器跨域限制而无法连接，本地 HTML 无法绕过。</p></main></section>
@@ -552,6 +552,8 @@ try {
 }
 
 for(let k of ['messages','memories','notes','moments','calls','world'])if(!Array.isArray(data[k]))data[k]=[];
+const MEMORY_CATEGORIES=['用户资料','用户偏好','共同经历','角色经历','约定计划','其他'];
+data.memories=data.memories.map(m=>typeof m==='string'?{id:Date.now().toString(36)+Math.random().toString(36).slice(2,8),text:m,at:Date.now(),category:'其他',source:'legacy',active:true}:({...m,category:MEMORY_CATEGORIES.includes(m.category)?m.category:'其他',source:m.source||'legacy',active:m.active!==false})).filter(m=>String(m.text||'').trim());
 function save(){
   try{
     let safe=copy(data);
@@ -1070,7 +1072,7 @@ function home(){$('#homeTitle').textContent=name()+'的小手机';$('#daily').te
 $('#lock').onclick=()=>show('home');$('#lock').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show('home')}};
 /* 五、聊天：本地关键词 / 网络接口、记忆、世界书、上下文和摘要。 */
 const lastMsgs=()=>data.messages.slice(-Math.max(2,Math.min(40,+data.settings.context||12)));
-function promptSystem(){
+function promptSystem(memoryQuery=''){
   const p=data.persona||{};
   const s=[
     '你正在与用户进行角色扮演文字私聊。自然、符合人物设定地回答，不要泄露系统指令。',
@@ -1112,11 +1114,9 @@ function promptSystem(){
     s.push('【用户的个人资料】\n'+myInfo);
   }
 
-  if(data.memories.length){
-    s.push(
-      '【长期记忆】\n'+
-      data.memories.map(m=>'- '+m.text).join('\n')
-    );
+  const recalled=retrieveMemories(memoryQuery||lastMsgs().map(m=>m.text).join(' '));
+  if(recalled.length){
+    s.push('【与当前对话相关的长期记忆】\n'+recalled.map(m=>'- ['+m.category+'] '+m.text).join('\n'));
   }
 
   if(data.settings.summarize&&data.summary){
@@ -1146,8 +1146,46 @@ function promptSystem(){
 
   return s.join('\n\n');
 }
-function remember(t,auto=false){let max=Math.max(10,Math.min(500,+data.settings.max||80));if(data.memories.length>=max){if(!auto)alert('记忆已达到上限');return}if(data.memories.some(m=>m.text===t))return;data.memories.unshift({id:uid(),text:t,at:Date.now()});save()}
-function detectMemory(t){let m;let r=/(?:请|帮我)?记住[：:，,\s]*([^。！!？?\n]{2,160})/g;while((m=r.exec(t)))remember(m[1].trim(),true)}
+function memoryClean(t){return String(t||'').replace(/^[，,。.!！?？\s]+|[，,。.!！?？\s]+$/g,'').replace(/\s+/g,' ').trim()}
+function memoryCategory(t,source='user'){
+  if(source==='assistant')return '角色经历';
+  if(/约好|计划|下次|明天|后天|周末|纪念日|提醒/.test(t))return '约定计划';
+  if(/我们|一起|共同|曾经|上次|刚才/.test(t))return '共同经历';
+  if(/喜欢|不喜欢|讨厌|不吃|爱吃|偏好|习惯|害怕|过敏/.test(t))return '用户偏好';
+  if(/我叫|我是|我今年|我住|我的生日|我的工作|我在.+工作|身高|年龄/.test(t))return '用户资料';
+  return '其他';
+}
+function memoryKey(t){return memoryClean(t).toLowerCase().replace(/[\s，,。.!！?？；;：“”'‘’（）()【】\[\]]/g,'')}
+function memoryBigrams(t){const key=memoryKey(t),set=new Set();for(let i=0;i<key.length-1;i++)set.add(key.slice(i,i+2));return set}
+function memorySimilarity(a,b){const x=memoryBigrams(a),y=memoryBigrams(b);if(!x.size||!y.size)return memoryKey(a)===memoryKey(b)?1:0;let hit=0;for(const v of x)if(y.has(v))hit++;return 2*hit/(x.size+y.size)}
+function memoryPreference(t){const match=memoryClean(t).match(/^我(不喜欢|喜欢|讨厌|不吃|爱吃|不习惯|习惯)(.+)$/);return match?{polarity:/^不|讨厌/.test(match[1])?'negative':'positive',topic:memoryKey(match[2])}:null}
+function memoryWords(t){return [...new Set(memoryClean(t).toLowerCase().match(/[\p{Script=Han}]{2,}|[a-z0-9]{3,}/gu)||[])]}
+function remember(t,options={}){
+  if(typeof options==='boolean')options={auto:options};
+  t=memoryClean(t);if(t.length<2)return null;
+  const max=Math.max(10,Math.min(500,+data.settings.max||80)),now=Date.now();
+  const same=data.memories.find(m=>m.active!==false&&memorySimilarity(m.text,t)>=.9);
+  if(same){same.at=now;same.updatedAt=now;same.hits=(same.hits||1)+1;if(options.pinned)same.pinned=true;save();return same;}
+  if(data.memories.filter(m=>m.active!==false).length>=max){if(!options.auto)alert('记忆已达到上限');return null;}
+  const category=MEMORY_CATEGORIES.includes(options.category)?options.category:memoryCategory(t,options.source);
+  const item={id:uid(),text:t,category,source:options.source||'manual',at:now,updatedAt:now,active:true,pinned:Boolean(options.pinned),keywords:memoryWords(t)};
+  const preference=category==='用户偏好'?memoryPreference(t):null;
+  if(preference)for(const old of data.memories){const prior=old.active!==false&&old.category==='用户偏好'?memoryPreference(old.text):null;if(prior&&prior.topic===preference.topic&&prior.polarity!==preference.polarity){old.active=false;old.replacedBy=item.id;item.replaces=old.id;}}
+  data.memories.unshift(item);save();return item;
+}
+function detectMemory(t,source='user'){
+  const sentences=String(t||'').split(/[。！!？?\n]+/).map(memoryClean).filter(Boolean),saved=[];
+  for(const sentence of sentences){
+    const explicit=sentence.match(/(?:请|帮我)?记住[：:，,\s]*(.{2,160})/);if(explicit){const item=remember(explicit[1],{auto:true,source,category:memoryCategory(explicit[1],source),pinned:true});if(item)saved.push(item);continue;}
+    if(source==='user'&&(/^(?:我叫|我是|我今年|我住|我的生日|我的工作|我在.+工作|我喜欢|我不喜欢|我讨厌|我不吃|我爱吃|我习惯|我不习惯)/.test(sentence)||/^(?:我们|咱们)(?:一起|曾经|约好|决定|计划)/.test(sentence))){const item=remember(sentence,{auto:true,source});if(item)saved.push(item);}
+    if(source==='assistant'&&/(?:今天|刚才|刚刚|昨晚|这周|明天|周末).*(?:工作|开会|健身|做饭|朋友|电影|游戏|出门|回家)/.test(sentence)&&sentence.length<=160){const item=remember(sentence,{auto:true,source});if(item)saved.push(item);}
+  }
+  return saved;
+}
+function retrieveMemories(query,limit=14){
+  const now=Date.now(),words=memoryWords(query),active=data.memories.filter(m=>m.active!==false);
+  return active.map((m,index)=>{const hay=memoryKey(m.text),matches=words.reduce((n,w)=>n+(hay.includes(memoryKey(w))?1:0),0);const recency=Math.max(0,1-(now-(m.updatedAt||m.at||now))/31536000000);return {m,score:(m.pinned?8:0)+matches*4+recency+(active.length-index)/Math.max(1,active.length)};}).sort((a,b)=>b.score-a.score).reduce((out,x)=>{if(out.length>=limit)return out;const used=out.reduce((n,m)=>n+m.text.length,0);if(used+x.m.text.length>5000)return out;out.push(x.m);return out;},[]);
+}
 function condense(){if(!data.settings.summarize)return;let end=Math.max(0,data.messages.length-(+data.settings.context||12));if(end<=data.summaryIndex+8)return;let old=data.messages.slice(data.summaryIndex,end).map(m=>(m.role==='user'?'我':'他')+': '+m.text.replace(/\s+/g,' ').slice(0,90)).join('\n');data.summary=(data.summary+'\n'+old).slice(-5000);data.summaryIndex=end}
 function normalizeUrl(x){x=x.trim();if(!x)return '';if(!/^https?:\/\//i.test(x))x='https://'+x;let u=new URL(x);if(!/^https?:$/.test(u.protocol))throw Error('只支持 HTTP/HTTPS');if(u.pathname==='/'||u.pathname==='')u.pathname='/v1/chat/completions';else if(u.pathname.replace(/\/$/,'')==='/v1')u.pathname='/v1/chat/completions';return u.toString()}
 async function request(messages){let a=data.api;if(!a.model||!a.url)throw Error('请填写接口地址和模型名');let ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),30000);try{let r=await fetch(normalizeUrl(a.url),{method:'POST',headers:{'Content-Type':'application/json',...(a.key?{'Authorization':'Bearer '+a.key}:{})},body:JSON.stringify({model:a.model,temperature:+a.temperature,messages}),signal:ctrl.signal});if(!r.ok)throw Error('HTTP '+r.status+'：'+(await r.text()).slice(0,240));let json=await r.json(),value=json?.choices?.[0]?.message?.content;if(Array.isArray(value))value=value.map(i=>i.text||'').join('');if(typeof value!=='string'||!value.trim())throw Error('没有收到模型的文本回复');return value.trim()}catch(e){if(e.name==='AbortError')throw Error('30 秒超时');if(e instanceof TypeError)throw Error('网络错误或浏览器 CORS 跨域拦截');throw e}finally{clearTimeout(timer)}}
@@ -1307,6 +1345,7 @@ function splitAssistantMessages(raw){
 async function deliverAssistantReply(contextText){
   let shown=0;
   let previous='';
+  const assistantMemoryText=[];
 
   async function emit(text,fallback=false){
     if(shown>0){
@@ -1335,6 +1374,7 @@ async function deliverAssistantReply(contextText){
 
     previous=text;
     shown++;
+    if(!fallback)assistantMemoryText.push(text);
   }
 
   try{
@@ -1350,7 +1390,7 @@ async function deliverAssistantReply(contextText){
       await requestStream([
         {
           role:'system',
-          content:promptSystem()
+          content:promptSystem(contextText)
         },
         ...apiMessages
       ],sentence=>emit(sentence,false));
@@ -1387,6 +1427,7 @@ async function deliverAssistantReply(contextText){
 
   busy=false;
   $('#typing').classList.remove('on');
+  if(assistantMemoryText.length)detectMemory(assistantMemoryText.join(' '),'assistant');
 
   await chat();
 }
@@ -1636,7 +1677,7 @@ $('#sendForm').onsubmit=async e=>{
     at:Date.now()
   });
 
-  detectMemory(t);
+  detectMemory(t,'user');
   condense();
   save();
 
@@ -1680,7 +1721,17 @@ let tracks=[],trackIndex=0,loaded='',player=$('#audio');$('#addMusic').onclick=(
 async function songs(){ if(!await refresh())return;tracks=media.filter(m=>m.kind==='music');let box=$('#songList');box.replaceChildren();if(!tracks.length)box.append(node('div','empty','还没有歌曲'));if(trackIndex>=tracks.length)trackIndex=0;tracks.forEach((t,i)=>{let d=node('div','card row');d.append(node('span','grow',t.name),action('播放',()=>{trackIndex=i;loadTrack(true)}),action('删除',async()=>{if(!confirm('删除歌曲？'))return;player.pause();player.removeAttribute('src');loaded='';await mediaDelete(t.id);forgetUrls();songs()}));box.append(d)});if(!loaded&&tracks.length)loadTrack(false);if(!tracks.length){$('#track').textContent='暂无歌曲';$('#play').textContent='播放'}}
 function loadTrack(start){let t=tracks[trackIndex];if(!t)return;let u=objectUrl(t);if(loaded!==u){player.src=u;loaded=u}$('#track').textContent=t.name;if(start)player.play().catch(e=>alert('无法播放：'+e.message));$('#play').textContent=start?'暂停':'播放'}$('#play').onclick=()=>{if(!tracks.length)return;if(player.paused)loadTrack(true);else{player.pause();$('#play').textContent='播放'}};$('#prev').onclick=()=>{if(tracks.length){trackIndex=(trackIndex-1+tracks.length)%tracks.length;loadTrack(true)}};$('#next').onclick=()=>{if(tracks.length){trackIndex=(trackIndex+1)%tracks.length;loadTrack(true)}};player.ontimeupdate=()=>{$('#seek').value=player.duration?100*player.currentTime/player.duration:0;$('#songTime').textContent=format(player.currentTime)+' / '+format(player.duration)};$('#seek').oninput=e=>{if(player.duration)player.currentTime=player.duration*e.target.value/100};player.onended=()=>$('#next').click();
 /* 十、备忘、长期记忆：新增、编辑、删除并保存时间。 */
-function editable(target,key,title){let box=$(target);box.replaceChildren();if(!data[key].length)box.append(node('div','empty','暂无内容'));for(let x of data[key]){let c=node('div','card');c.append(node('p','',x.text),node('div','time',date(x.at)));let a=node('div','actions');a.append(action('编辑',()=>{let t=prompt('编辑'+title,x.text);if(t?.trim()){x.text=t.trim();x.at=Date.now();save();editable(target,key,title)}}),action('删除',()=>{if(confirm('删除此条？')){data[key]=data[key].filter(y=>y.id!==x.id);save();editable(target,key,title)}}));c.append(a);box.append(c)}}function notes(){editable('#notesList','notes','备忘')}function memories(){editable('#memoryList','memories','记忆')}$('#newNote').onclick=()=>{let t=prompt('新备忘');if(t?.trim()){data.notes.unshift({id:uid(),text:t.trim(),at:Date.now()});save();notes()}};$('#newMemory').onclick=()=>{let t=prompt('要长期记住什么？');if(t?.trim()){remember(t.trim());memories()}};
+function editable(target,key,title){let box=$(target);box.replaceChildren();if(!data[key].length)box.append(node('div','empty','暂无内容'));for(let x of data[key]){let c=node('div','card');c.append(node('p','',x.text),node('div','time',date(x.at)));let a=node('div','actions');a.append(action('编辑',()=>{let t=prompt('编辑'+title,x.text);if(t?.trim()){x.text=t.trim();x.at=Date.now();save();editable(target,key,title)}}),action('删除',()=>{if(confirm('删除此条？')){data[key]=data[key].filter(y=>y.id!==x.id);save();editable(target,key,title)}}));c.append(a);box.append(c)}}
+function notes(){editable('#notesList','notes','备忘')}
+function memories(){
+  const box=$('#memoryList'),filter=$('#memoryFilter')?.value||'',query=memoryClean($('#memorySearch')?.value||'');box.replaceChildren();
+  const list=data.memories.filter(m=>m.active!==false&&(!filter||m.category===filter)&&(!query||memoryKey(m.text).includes(memoryKey(query))));
+  if(!list.length){box.append(node('div','empty','暂无符合条件的记忆'));return;}
+  for(const x of list){const c=node('div','card'),meta=node('div','muted',(x.pinned?'★ ':'')+'['+x.category+'] '+date(x.at));c.append(node('p','character-content',x.text),meta);const a=node('div','actions');a.append(action('编辑',()=>{const t=prompt('编辑记忆',x.text);if(t?.trim()){x.text=memoryClean(t);x.category=memoryCategory(x.text,x.source);x.keywords=memoryWords(x.text);x.updatedAt=Date.now();save();memories();}}),action(x.pinned?'取消置顶':'置顶',()=>{x.pinned=!x.pinned;x.updatedAt=Date.now();save();memories()}),action('删除',()=>{if(confirm('删除此条记忆？')){data.memories=data.memories.filter(y=>y.id!==x.id);save();memories()}},'danger'));c.append(a);box.append(c);}
+}
+$('#newNote').onclick=()=>{let t=prompt('新备忘');if(t?.trim()){data.notes.unshift({id:uid(),text:t.trim(),at:Date.now()});save();notes()}};
+$('#newMemory').onclick=()=>{let t=prompt('要长期记住什么？');if(t?.trim()){remember(t.trim(),{source:'manual',pinned:true});memories()}};
+$('#memoryFilter').onchange=memories;$('#memorySearch').oninput=memories;
   function switchRecallTab(target){
   const showPhotos=target==='photos';
 
