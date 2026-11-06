@@ -505,7 +505,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
     </div>
   </main>
 </section>
-<section class="screen" id="settings"><header class="head"><button class="back" data-home>‹</button><b>设置</b></header><main class="body"><form id="settingsForm"><div class="field"><label>显示名字（覆盖人设名字）</label><input id="displayName"></div><div class="field"><label>桌面底部小字</label><input id="footerText"></div><div class="field"><label>最近聊天带几条（2–40）</label><input id="context" type="number" min="2" max="40"></div><div class="field"><label class="switch">自动摘要旧聊天 <input id="summaryOn" type="checkbox"></label></div><div class="field"><label>长期记忆上限（10–500）</label><input id="memoryMax" type="number" min="10" max="500"></div><div class="card"><h3>沈砚主动联系你</h3><div class="field"><label class="switch">允许沈砚主动发消息 <input id="proactive" type="checkbox"></label></div><div class="field"><label>两次主动消息至少间隔（小时）</label><input id="proactiveHours" type="number" min="1" max="48"></div><div class="row"><div class="field grow"><label>沈砚停止发消息（时）</label><input id="quietStart" type="number" min="0" max="23"></div><div class="field grow"><label>沈砚恢复发消息（时）</label><input id="quietEnd" type="number" min="0" max="23"></div></div><p class="muted">例如 23 到 8 表示晚上 23 点至早上 8 点沈砚不会主动打扰你；你随时都能给他发消息。</p><p class="muted" id="proactiveStatus"></p><p class="muted">无需手动点击：你停止聊天约 30 分钟后，网页保持打开、回到前台或重新打开时会自动检查。iPhone Safari 完全关闭网页后不能在后台生成新消息。</p><div class="actions"><button type="button" class="btn alt small" id="testProactive">立即测试一次（仅测试）</button><button type="button" class="btn alt small" id="enableNotifications">开启通知</button></div></div><div class="actions">
+<section class="screen" id="settings"><header class="head"><button class="back" data-home>‹</button><b>设置</b></header><main class="body"><form id="settingsForm"><div class="field"><label>显示名字（覆盖人设名字）</label><input id="displayName"></div><div class="field"><label>桌面底部小字</label><input id="footerText"></div><div class="field"><label>最近聊天带几条（2–40）</label><input id="context" type="number" min="2" max="40"></div><div class="field"><label class="switch">自动摘要旧聊天 <input id="summaryOn" type="checkbox"></label></div><div class="field"><label>长期记忆上限（10–500）</label><input id="memoryMax" type="number" min="10" max="500"></div><div class="card"><h3>沈砚自由主动联系你</h3><div class="field"><label class="switch">允许沈砚主动发消息 <input id="proactive" type="checkbox"></label></div><p class="muted">不限制固定时段、最短间隔或每天次数。沈砚会结合自己的忙闲状态、最近话题和你们的互动，自由决定什么时候来找你。</p><p class="muted">为了不连续轰炸，如果上一条主动消息还没有得到回复，他会先等你；你回复后，他以后仍可继续主动联系。</p><p class="muted" id="proactiveStatus"></p><p class="muted">网页保持打开、回到前台或重新打开时会检查。iPhone Safari 完全关闭网页后不能在后台生成新消息。</p><div class="actions"><button type="button" class="btn alt small" id="testProactive">立即测试一次（仅测试）</button><button type="button" class="btn alt small" id="enableNotifications">开启通知</button></div></div><div class="actions">
 <button class="btn">保存设置</button>
 <button type="button" class="btn alt" data-go="api">接口与模型</button>
 <button type="button" class="btn alt" data-go="backup">备份与恢复</button>
@@ -2102,9 +2102,6 @@ function settings(){
   $('#summaryOn').checked=s.summarize;
   $('#memoryMax').value=s.max;
   $('#proactive').checked=s.proactive;
-  $('#proactiveHours').value=s.proactiveHours||3;
-  $('#quietStart').value=Number.isFinite(+s.quietStart)?s.quietStart:23;
-  $('#quietEnd').value=Number.isFinite(+s.quietEnd)?s.quietEnd:8;
   renderProactiveStatus();
 }
 
@@ -2120,9 +2117,6 @@ $('#settingsForm').onsubmit=e=>{
     summarize:$('#summaryOn').checked,
     max:Math.max(10,Math.min(500,+$('#memoryMax').value||80)),
     proactive:$('#proactive').checked,
-    proactiveHours:Math.max(1,Math.min(48,+$('#proactiveHours').value||3)),
-    quietStart:Math.max(0,Math.min(23,+$('#quietStart').value||0)),
-    quietEnd:Math.max(0,Math.min(23,+$('#quietEnd').value||0)),
     notifications:Boolean(data.settings.notifications)
   };
 
@@ -2491,17 +2485,19 @@ function proactiveLocalText(state,kind){
 }
 function renderProactiveStatus(){
   const box=$('#proactiveStatus');if(!box)return;const state=roleLifeState(),last=data.proactiveState?.lastSentAt;
-  box.textContent='当前状态：'+state.activity+' · '+state.mood+(last?'｜上次主动联系：'+date(last):'｜尚未主动联系');
+  const unanswered=data.messages[data.messages.length-1]?.proactive?'｜正在等你回复':'';box.textContent='当前状态：'+state.activity+' · '+state.mood+(last?'｜上次主动联系：'+date(last):'｜尚未主动联系')+unanswered;
+}
+function nextCompanionOpportunity(life,now=Date.now()){
+  const busy=life.period.includes('work'),minutes=busy?20+Math.random()*80:5+Math.random()*50;return now+Math.round(minutes*60000);
 }
 function proactiveAllowed(now=new Date(),force=false){
   if(force)return true;if(!data.settings.proactive)return false;
-  if(inQuietHours(now.getHours(),+data.settings.quietStart,+data.settings.quietEnd))return false;
-  const state=data.proactiveState||DEF.proactiveState,today=day();
-  if(state.lastSentDay===today&&(state.sentToday||0)>=2)return false;
+  const state=data.proactiveState||DEF.proactiveState;
   const lastMessage=data.messages[data.messages.length-1];if(lastMessage?.role==='assistant'&&lastMessage.proactive)return false;
-  if(state.lastSentAt&&Date.now()-state.lastSentAt<Math.max(1,+data.settings.proactiveHours||3)*3600000)return false;
-  const lastUser=[...data.messages].reverse().find(m=>m.role==='user');if(lastUser&&Date.now()-lastUser.at<30*60000)return false;
-  return Boolean(data.lastOpen&&(data.lastOpen!==today||state.lastSentAt||lastUser));
+  const lastUser=[...data.messages].reverse().find(m=>m.role==='user');
+  if(lastUser&&state.lastUserAt!==lastUser.at){state.lastUserAt=lastUser.at;state.nextOpportunityAt=nextCompanionOpportunity(roleLifeState(now),now.getTime());return false;}
+  if(!state.nextOpportunityAt){state.nextOpportunityAt=nextCompanionOpportunity(roleLifeState(now),now.getTime());return false;}
+  return now.getTime()>=state.nextOpportunityAt;
 }
 async function proactiveMessage(force=false){
   const now=new Date(),today=day(),life=roleLifeState(now),state=data.proactiveState={...DEF.proactiveState,...data.proactiveState,lastCheck:Date.now(),period:life.period,activity:life.activity,mood:life.mood},kind=companionKind(life);
@@ -2515,7 +2511,7 @@ async function proactiveMessage(force=false){
   const recent=Array.isArray(state.lastTexts)?state.lastTexts:[];if(parts.some(part=>recent.some(old=>memorySimilarity(part,old)>.78)))parts=[proactiveLocalText(life,kind)];
   parts.forEach((part,index)=>data.messages.push({id:uid(),role:'assistant',text:part,at:Date.now()+index,proactive:true}));
   state.lastKind=kind;state.lastTexts=[...recent,...parts].slice(-6);
-  if(!force){state.lastSentAt=Date.now();state.sentToday=state.lastSentDay===today?(state.sentToday||0)+1:1;state.lastSentDay=today;}data.lastOpen=today;parts.forEach(part=>detectMemory(part,'assistant'));save();renderProactiveStatus();
+  if(!force){state.lastSentAt=Date.now();state.nextOpportunityAt=nextCompanionOpportunity(life);}data.lastOpen=today;parts.forEach(part=>detectMemory(part,'assistant'));save();renderProactiveStatus();
   if(data.settings.notifications&&typeof Notification!=='undefined'&&Notification.permission==='granted'&&document.hidden){try{new Notification(name(),{body:parts.join(' ')})}catch(error){console.warn('通知发送失败',error)}}
   return true;
 }
