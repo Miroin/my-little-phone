@@ -343,6 +343,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
     <div class="actions" style="margin-top:0;margin-bottom:14px">
       <button type="button" class="btn" id="recallPhotosTab">照片</button>
       <button type="button" class="btn alt" id="recallNotesTab">备忘</button>
+      <button type="button" class="btn alt" id="recallVoicesTab">语音收藏</button>
     </div>
 
     <div id="recallPhotosPanel">
@@ -355,6 +356,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
       </div>
       <div id="notesList"></div>
     </div>
+    <div id="recallVoicesPanel" hidden><div id="voiceFavoritesList"></div></div>
   </main>
 </section>
 <section class="screen" id="calls"><header class="head"><button class="back" data-home>‹</button><b>通话</b></header><main class="body"><div class="card center"><div class="avatar big" id="callAvatar">♡</div><h2 id="callName"></h2><div id="callStatus" class="muted">尚未接通</div><h1 id="callClock">00:00</h1><div class="actions" style="justify-content:center"><button class="btn" id="connect">接通</button><button class="btn danger" id="hangup">挂断</button></div><p class="muted">此处为模拟通话计时，不支持真实语音。</p></div><h3>通话记录</h3><div id="callList"></div></main></section>
@@ -516,7 +518,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
 'use strict';
 /* 二、文字放 localStorage。读取失败时给出默认值而不让整页崩溃。 */
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
-const DEF={messages:[],memories:[],notes:[],moments:[],calls:[],world:[],summary:'',summaryIndex:0,lastOpen:'',today:'',todayText:'',proactiveState:{lastCheck:0,lastSentAt:0,lastSentDay:'',sentToday:0,period:'',activity:'',mood:'平静'},persona:{name:'',callme:'',personality:'',catchphrase:'',taboo:'',first:'',extra:'',birthday:'',zodiac:'',hobbies:'',signature:''},api:{mode:'local',url:'',model:'',key:'',temperature:.8},settings:{name:'',footer:'有些话，只想说给你听。',theme:'pink',context:12,summarize:true,max:80,proactive:true,proactiveHours:3,quietStart:23,quietEnd:8,notifications:false},myProfile:{name:'我',signature:'',id:'',categories:{}},yanProfile:{name:'沈砚',signature:'',id:'',categories:{}}};
+const DEF={messages:[],memories:[],notes:[],moments:[],calls:[],world:[],voiceFavorites:[],summary:'',summaryIndex:0,lastOpen:'',today:'',todayText:'',proactiveState:{lastCheck:0,lastSentAt:0,lastSentDay:'',sentToday:0,period:'',activity:'',mood:'平静'},persona:{name:'',callme:'',personality:'',catchphrase:'',taboo:'',first:'',extra:'',birthday:'',zodiac:'',hobbies:'',signature:''},api:{mode:'local',url:'',model:'',key:'',temperature:.8},settings:{name:'',footer:'有些话，只想说给你听。',theme:'pink',context:12,summarize:true,max:80,proactive:true,proactiveHours:3,quietStart:23,quietEnd:8,notifications:false},myProfile:{name:'我',signature:'',id:'',categories:{}},yanProfile:{name:'沈砚',signature:'',id:'',categories:{}}};
 
 const copy=x=>JSON.parse(JSON.stringify(x));
 let old={};
@@ -1448,6 +1450,24 @@ async function deliverAssistantReply(contextText){
 
   await chat();
 }
+let speakingMessageId='',activeUtterance=null;
+async function refreshVoiceUi(){await chat();if($('#recallVoicesPanel')&&!$('#recallVoicesPanel').hidden)voiceFavorites();}
+function chineseVoice(){
+  const voices=typeof speechSynthesis==='undefined'?[]:speechSynthesis.getVoices();return voices.find(v=>/^zh[-_]CN/i.test(v.lang)&&/male|yunxi|yunyang|ting/i.test(v.name))||voices.find(v=>/^zh/i.test(v.lang))||null;
+}
+async function stopVoice(refreshChat=true){
+  if(typeof speechSynthesis!=='undefined')speechSynthesis.cancel();speakingMessageId='';activeUtterance=null;if(refreshChat)await refreshVoiceUi();
+}
+async function playVoice(text,messageId=''){
+  if(!('speechSynthesis'in window)||typeof SpeechSynthesisUtterance==='undefined'){alert('当前浏览器不支持系统语音朗读。请使用最新版 iPhone Safari。');return;}
+  if(speakingMessageId===messageId&&speechSynthesis.speaking){await stopVoice();return;}
+  speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(String(text||''));utterance.lang='zh-CN';utterance.rate=.92;utterance.pitch=.88;const voice=chineseVoice();if(voice)utterance.voice=voice;
+  speakingMessageId=messageId;activeUtterance=utterance;utterance.onend=utterance.onerror=()=>{if(activeUtterance!==utterance)return;speakingMessageId='';activeUtterance=null;refreshVoiceUi();};speechSynthesis.speak(utterance);await refreshVoiceUi();
+}
+function voiceFavorite(message){return data.voiceFavorites.find(item=>item.messageId===message.id)}
+async function toggleVoiceFavorite(message){
+  const existing=voiceFavorite(message);if(existing)data.voiceFavorites=data.voiceFavorites.filter(item=>item.id!==existing.id);else data.voiceFavorites.unshift({id:uid(),messageId:message.id,text:message.text,at:Date.now(),messageAt:message.at});save();await chat();
+}
 const thoughtOpen=new Set(),thoughtBusy=new Set();
 function localThoughtFor(message){
   const text=String(message?.text||'');
@@ -1506,7 +1526,7 @@ async function toggleThought(messageId){
 
     body.append(bubble,node('div','time',date(m.at)+(m.fallback?' · 本地回退':'')));
     if(m.role==='assistant'&&m.text){
-      const tools=node('div','message-tools'),button=node('button','',thoughtOpen.has(m.id)?'收起心绪':'心绪');button.type='button';button.onclick=()=>toggleThought(m.id);tools.append(button);body.append(tools);
+      const tools=node('div','message-tools'),button=node('button','',thoughtOpen.has(m.id)?'收起心绪':'心绪'),voiceButton=node('button','',speakingMessageId===m.id?'■ 停止':'▶ 语音'),favoriteButton=node('button','',voiceFavorite(m)?'★ 已收藏':'☆ 收藏');button.type=voiceButton.type=favoriteButton.type='button';button.onclick=()=>toggleThought(m.id);voiceButton.onclick=()=>playVoice(m.text,m.id);favoriteButton.onclick=()=>toggleVoiceFavorite(m);tools.append(button,voiceButton,favoriteButton);body.append(tools);
       if(thoughtOpen.has(m.id))body.append(node('div','thought-panel',thoughtBusy.has(m.id)?'正在整理这一刻的感受…':(m.thought||localThoughtFor(m))));
     }
 
@@ -1772,14 +1792,20 @@ function memories(){
 $('#newNote').onclick=()=>{let t=prompt('新备忘');if(t?.trim()){data.notes.unshift({id:uid(),text:t.trim(),at:Date.now()});save();notes()}};
 $('#newMemory').onclick=()=>{let t=prompt('要长期记住什么？');if(t?.trim()){remember(t.trim(),{source:'manual',pinned:true});memories()}};
 $('#memoryFilter').onchange=memories;$('#memorySearch').oninput=memories;
+function voiceFavorites(){
+  const box=$('#voiceFavoritesList');box.replaceChildren();if(!data.voiceFavorites.length){box.append(node('div','empty','还没有收藏语音。在聊天里点击“☆ 收藏”即可保存。'));return;}
+  for(const item of data.voiceFavorites){const card=node('div','card'),buttons=node('div','actions');card.append(node('p','character-content',item.text),node('div','time','收藏于 '+date(item.at)));buttons.append(action(speakingMessageId===item.id?'停止':'播放',()=>playVoice(item.text,item.id)),action('删除',()=>{data.voiceFavorites=data.voiceFavorites.filter(x=>x.id!==item.id);save();voiceFavorites()},'danger'));card.append(buttons);box.append(card);}
+}
   function switchRecallTab(target){
-  const showPhotos=target==='photos';
+  const showPhotos=target==='photos',showNotes=target==='notes',showVoices=target==='voices';
 
   $('#recallPhotosPanel').hidden=!showPhotos;
-  $('#recallNotesPanel').hidden=showPhotos;
+  $('#recallNotesPanel').hidden=!showNotes;
+  $('#recallVoicesPanel').hidden=!showVoices;
 
   $('#recallPhotosTab').classList.toggle('alt',!showPhotos);
-  $('#recallNotesTab').classList.toggle('alt',showPhotos);
+  $('#recallNotesTab').classList.toggle('alt',!showNotes);
+  $('#recallVoicesTab').classList.toggle('alt',!showVoices);
 }
 
 $('#recallPhotosTab').onclick=()=>{
@@ -1790,6 +1816,7 @@ $('#recallNotesTab').onclick=()=>{
   switchRecallTab('notes');
   notes();
 };
+$('#recallVoicesTab').onclick=()=>{switchRecallTab('voices');voiceFavorites();};
 /* 十一、人设卡：自然语言档案解析、分类编辑及安全保存。 */
 const CHARACTER_SECTIONS=['基本资料','性格与行为','恋爱与亲密关系','个人经历','生活与兴趣','共同经历与记忆'];
 const CHARACTER_IMPORT_BACKUP_KEY='rp_phone_character_import_backup_v1';
