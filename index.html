@@ -1115,15 +1115,6 @@ function promptSystem(){
     s.push('【用户的个人资料】\n'+myInfo);
   }
 
-  s.push(
-    '【双方关系：最高优先级】\n'+
-    '你和用户已经正式确立恋爱关系，是稳定、双向、平等的情侣。'+
-    '你们不再处于暧昧考察、实习男友或等待转正阶段。'+
-    '旧人设卡中与正式恋爱关系冲突的描述全部作废。'+
-    '老板、实习生等称呼可以作为情侣间的玩笑，但不代表关系尚未确定。'+
-    '你拥有独立人格、生活、判断和情绪，主动表达感情，同时尊重用户的自由与边界。'
-  );
-
   if(data.memories.length){
     s.push(
       '【长期记忆】\n'+
@@ -2021,6 +2012,144 @@ $('#backupInput').onchange=async e=>{
     e.target.value='';
   }
 };
+
+/* 独立重置角色数据：保留世界书、个人资料和素材库 */
+async function resetTemporaryCharacter(){
+  if(busy){
+    alert('正在回复消息，请等回复结束后再重置。');
+    return;
+  }
+
+  if(!confirm(
+    '确定重置临时角色吗？\n\n'+
+    '将删除：聊天、长期记忆、人设卡、角色资料、'+
+    '朋友圈、备忘、通话记录及旧角色头像。\n\n'+
+    '保留：世界书、你的个人资料、相册、表情包、'+
+    '音乐、壁纸、API 配置和美化设置。\n\n'+
+    '此操作不可撤销。'
+  ))return;
+
+  if(prompt('最后确认：请输入“重置角色”')!=='重置角色'){
+    alert('已取消，没有删除任何数据。');
+    return;
+  }
+
+  const items=await mediaAll();
+  if(items===null){
+    alert('媒体库读取失败，已取消重置。');
+    return;
+  }
+
+  const previous=copy(data);
+  const myAvatarId=data.avatarSlots?.my||'my-avatar';
+
+  // 只清理头像素材；保留当前使用的本人头像。
+  // 照片、表情包、音乐、壁纸均不删除。
+  const avatarItems=items.filter(item=>
+    item.kind==='avatar'&&item.id!==myAvatarId
+  );
+
+  const next=copy(data);
+
+  next.messages=[];
+  next.memories=[];
+  next.calls=[];
+  next.moments=[];
+  next.notes=[];
+  next.summary='';
+  next.summaryIndex=0;
+  next.persona=copy(DEF.persona);
+  next.yanProfile={
+    name:'',
+    signature:'',
+    id:'',
+    categories:{}
+  };
+
+  next.settings.name='';
+  next.lastOpen=day();
+  next.today='';
+  next.todayText='';
+
+  next.avatarSlots={
+    ...next.avatarSlots,
+    my:myAvatarId,
+    yan:''
+  };
+
+  // 保留 world、myProfile、api、主题及其他设置。
+  data=next;
+
+  if(!save()){
+    data=previous;
+    alert('文字数据保存失败，已取消重置。');
+    return;
+  }
+
+  try{
+    const database=await db();
+
+    await new Promise((resolve,reject)=>{
+      const tx=database.transaction('files','readwrite');
+      const store=tx.objectStore('files');
+
+      for(const item of avatarItems){
+        store.delete(item.id);
+      }
+
+      tx.oncomplete=resolve;
+      tx.onerror=()=>reject(tx.error);
+      tx.onabort=()=>reject(tx.error);
+    });
+  }catch(err){
+    data=previous;
+
+    if(!save()){
+      alert('头像清理失败，且文字数据恢复失败。请使用备份恢复。');
+      return;
+    }
+
+    alert('头像清理失败，文字数据已恢复：'+err.message);
+    return;
+  }
+
+  forgetUrls();
+  await refresh();
+  await loadYanAvatar();
+  await loadMyAvatar();
+
+  theme();
+  home();
+  await stats();
+
+  alert('角色数据重置完成。世界书、图库、表情包及设置均已保留。');
+}
+
+// 在备份页面创建独立的重置入口
+const resetCharacterCard=document.createElement('div');
+resetCharacterCard.className='card';
+
+resetCharacterCard.innerHTML=`
+  <h3>重置角色数据</h3>
+  <p class="muted">
+    为正式角色回归准备干净环境。
+    清除临时角色的人设、记忆、聊天、通话、
+    朋友圈、备忘和旧头像。
+    不影响世界书、图库、表情包及 API 设置。
+  </p>
+  <button type="button" class="btn danger" id="resetCharacter">
+    重置临时角色
+  </button>
+`;
+
+const backupPage=document.querySelector('#backup .body');
+const eraseCard=document.querySelector('#erase')?.closest('.card');
+
+if(backupPage&&eraseCard){
+  backupPage.insertBefore(resetCharacterCard,eraseCard);
+  document.querySelector('#resetCharacter').onclick=
+    resetTemporaryCharacter;
+}
 
 $('#erase').onclick=async()=>{if(!confirm('第一次确认：真的清除这台小手机的全部数据？'))return;if(prompt('第二次确认：输入“清空全部”')!=='清空全部')return;if(!await mediaClear()){alert('清除媒体库失败，请检查浏览器权限。');return}player.pause();player.removeAttribute('src');loaded='';forgetUrls();try{localStorage.removeItem(API_KEY_STORAGE)}catch(e){alert('API Key 清理失败：'+e.message);return}data=copy(DEF);save();theme();home();stats();alert('已经清空此浏览器的小手机资料')};
 /* 十六、主动消息：网页关闭后无法后台运行；跨天再打开时补发。 */
