@@ -505,7 +505,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
     </div>
   </main>
 </section>
-<section class="screen" id="settings"><header class="head"><button class="back" data-home>‹</button><b>设置</b></header><main class="body"><form id="settingsForm"><div class="field"><label>显示名字（覆盖人设名字）</label><input id="displayName"></div><div class="field"><label>桌面底部小字</label><input id="footerText"></div><div class="field"><label>最近聊天带几条（2–40）</label><input id="context" type="number" min="2" max="40"></div><div class="field"><label class="switch">自动摘要旧聊天 <input id="summaryOn" type="checkbox"></label></div><div class="field"><label>长期记忆上限（10–500）</label><input id="memoryMax" type="number" min="10" max="500"></div><div class="field"><label class="switch">跨天打开时补发主动消息 <input id="proactive" type="checkbox"></label></div><div class="actions">
+<section class="screen" id="settings"><header class="head"><button class="back" data-home>‹</button><b>设置</b></header><main class="body"><form id="settingsForm"><div class="field"><label>显示名字（覆盖人设名字）</label><input id="displayName"></div><div class="field"><label>桌面底部小字</label><input id="footerText"></div><div class="field"><label>最近聊天带几条（2–40）</label><input id="context" type="number" min="2" max="40"></div><div class="field"><label class="switch">自动摘要旧聊天 <input id="summaryOn" type="checkbox"></label></div><div class="field"><label>长期记忆上限（10–500）</label><input id="memoryMax" type="number" min="10" max="500"></div><div class="card"><h3>主动联系与生活状态</h3><div class="field"><label class="switch">允许主动联系 <input id="proactive" type="checkbox"></label></div><div class="field"><label>最短联系间隔（小时）</label><input id="proactiveHours" type="number" min="3" max="48"></div><div class="row"><div class="field grow"><label>勿扰开始</label><input id="quietStart" type="number" min="0" max="23"></div><div class="field grow"><label>勿扰结束</label><input id="quietEnd" type="number" min="0" max="23"></div></div><p class="muted" id="proactiveStatus"></p><p class="muted">网页打开或从后台恢复时才会检查。iPhone Safari 完全关闭网页后不能保证后台运行或发消息。</p><div class="actions"><button type="button" class="btn alt small" id="testProactive">生成测试消息</button><button type="button" class="btn alt small" id="enableNotifications">开启通知</button></div></div><div class="actions">
 <button class="btn">保存设置</button>
 <button type="button" class="btn alt" data-go="api">接口与模型</button>
 <button type="button" class="btn alt" data-go="backup">备份与恢复</button>
@@ -515,7 +515,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
 'use strict';
 /* 二、文字放 localStorage。读取失败时给出默认值而不让整页崩溃。 */
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
-const DEF={messages:[],memories:[],notes:[],moments:[],calls:[],world:[],summary:'',summaryIndex:0,lastOpen:'',today:'',todayText:'',persona:{name:'',callme:'',personality:'',catchphrase:'',taboo:'',first:'',extra:'',birthday:'',zodiac:'',hobbies:'',signature:''},api:{mode:'local',url:'',model:'',key:'',temperature:.8},settings:{name:'',footer:'有些话，只想说给你听。',theme:'pink',context:12,summarize:true,max:80,proactive:true},myProfile:{name:'我',signature:'',id:'',categories:{}},yanProfile:{name:'沈砚',signature:'',id:'',categories:{}}};
+const DEF={messages:[],memories:[],notes:[],moments:[],calls:[],world:[],summary:'',summaryIndex:0,lastOpen:'',today:'',todayText:'',proactiveState:{lastCheck:0,lastSentAt:0,lastSentDay:'',sentToday:0,period:'',activity:'',mood:'平静'},persona:{name:'',callme:'',personality:'',catchphrase:'',taboo:'',first:'',extra:'',birthday:'',zodiac:'',hobbies:'',signature:''},api:{mode:'local',url:'',model:'',key:'',temperature:.8},settings:{name:'',footer:'有些话，只想说给你听。',theme:'pink',context:12,summarize:true,max:80,proactive:true,proactiveHours:8,quietStart:23,quietEnd:8,notifications:false},myProfile:{name:'我',signature:'',id:'',categories:{}},yanProfile:{name:'沈砚',signature:'',id:'',categories:{}}};
 
 const copy=x=>JSON.parse(JSON.stringify(x));
 let old={};
@@ -527,6 +527,7 @@ let data={
   persona:{...DEF.persona,...(old.persona||{})},
   api:{...DEF.api,...(old.api||{})},
   settings:{...DEF.settings,...(old.settings||{})},
+  proactiveState:{...DEF.proactiveState,...(old.proactiveState||{})},
   myProfile:{...DEF.myProfile,...(old.myProfile||{})},
   yanProfile:{...DEF.yanProfile,...(old.yanProfile||{})}
 };
@@ -2098,6 +2099,10 @@ function settings(){
   $('#summaryOn').checked=s.summarize;
   $('#memoryMax').value=s.max;
   $('#proactive').checked=s.proactive;
+  $('#proactiveHours').value=s.proactiveHours||8;
+  $('#quietStart').value=Number.isFinite(+s.quietStart)?s.quietStart:23;
+  $('#quietEnd').value=Number.isFinite(+s.quietEnd)?s.quietEnd:8;
+  renderProactiveStatus();
 }
 
 $('#settingsForm').onsubmit=e=>{
@@ -2111,7 +2116,11 @@ $('#settingsForm').onsubmit=e=>{
     context:Math.max(2,Math.min(40,+$('#context').value||12)),
     summarize:$('#summaryOn').checked,
     max:Math.max(10,Math.min(500,+$('#memoryMax').value||80)),
-    proactive:$('#proactive').checked
+    proactive:$('#proactive').checked,
+    proactiveHours:Math.max(3,Math.min(48,+$('#proactiveHours').value||8)),
+    quietStart:Math.max(0,Math.min(23,+$('#quietStart').value||0)),
+    quietEnd:Math.max(0,Math.min(23,+$('#quietEnd').value||0)),
+    notifications:Boolean(data.settings.notifications)
   };
 
   save();
@@ -2455,17 +2464,67 @@ if(backupPage&&eraseCard){
 }
 
 $('#erase').onclick=async()=>{if(!confirm('第一次确认：真的清除这台小手机的全部数据？'))return;if(prompt('第二次确认：输入“清空全部”')!=='清空全部')return;if(!await mediaClear()){alert('清除媒体库失败，请检查浏览器权限。');return}player.pause();player.removeAttribute('src');loaded='';forgetUrls();try{localStorage.removeItem(API_KEY_STORAGE)}catch(e){alert('API Key 清理失败：'+e.message);return}data=copy(DEF);save();theme();home();stats();alert('已经清空此浏览器的小手机资料')};
-/* 十六、主动消息：网页关闭后无法后台运行；跨天再打开时补发。 */
-function proactiveMessage(){let today=day();if(data.lastOpen&&data.lastOpen!==today&&data.settings.proactive)data.messages.push({id:uid(),role:'assistant',text:'今天又想找你聊聊天。你过得怎么样？',at:Date.now()});else if(!data.messages.length&&data.persona.first)data.messages.push({id:uid(),role:'assistant',text:data.persona.first,at:Date.now()});data.lastOpen=today;save()}
+/* 十六、主动消息：只在页面打开或恢复时运行，按日程、冷却和勿扰时间防止骚扰。 */
+function roleLifeState(now=new Date()){
+  const hour=now.getHours(),weekend=[0,6].includes(now.getDay());let period='',activity='',mood='平静';
+  if(hour<7){period='sleep';activity='休息';mood='安静';}
+  else if(hour<9){period='morning';activity=weekend?'慢慢起床、吃早餐':'起床、洗漱和准备上班';mood='清醒中';}
+  else if(hour<12){period='morning-work';activity=weekend?'处理家务或自己的兴趣':'处理产品体验设计工作';mood='专注';}
+  else if(hour<14){period='lunch';activity='午餐和短暂休息';mood='放松';}
+  else if(hour<18){period='afternoon';activity=weekend?'外出、看电影或安排个人活动':'继续工作和项目沟通';mood='稳定';}
+  else if(hour<20){period='evening';activity=weekend?'买菜、做饭或出门':'下班、健身或准备晚餐';mood='松弛';}
+  else if(hour<23){period='night';activity='听音乐、看电影、玩游戏或休息';mood='放松';}
+  else{period='late-night';activity='准备休息';mood='疲惫';}
+  return {period,activity,mood,hour,weekend};
+}
+function inQuietHours(hour,start=23,end=8){return start===end?false:start<end?hour>=start&&hour<end:hour>=start||hour<end}
+function proactiveLocalText(state){
+  const options={morning:['早。刚收拾好，准备开始今天的事。','起床了。今天想把节奏放慢一点。'],'morning-work':['刚把手上的事情理顺，忽然想起你。','工作间隙喘口气。你那边还顺利吗？'],lunch:['刚准备吃点东西。你也别忙到忘了吃饭。','午休一会儿，顺便来看看你。'],afternoon:['下午的事情处理得差不多了。想听听你今天过得怎么样。','刚结束一段工作，脑子终于能松一会儿。'],evening:['刚忙完，打算去动一动或者弄点吃的。','下班后的时间终于是自己的了。晚上想做点什么？'],night:['刚放了点音乐。忽然觉得这首歌你可能会喜欢。','准备找部片子看。你今晚想安静待着，还是聊会儿？']};
+  const list=options[state.period]||['我准备休息了。你也别熬得太晚。'];return list[[...day()+state.period].reduce((n,c)=>n+c.charCodeAt(0),0)%list.length];
+}
+function renderProactiveStatus(){
+  const box=$('#proactiveStatus');if(!box)return;const state=roleLifeState(),last=data.proactiveState?.lastSentAt;
+  box.textContent='当前状态：'+state.activity+' · '+state.mood+(last?'｜上次主动联系：'+date(last):'｜尚未主动联系');
+}
+function proactiveAllowed(now=new Date(),force=false){
+  if(force)return true;if(!data.settings.proactive||document.hidden)return false;
+  if(inQuietHours(now.getHours(),+data.settings.quietStart,+data.settings.quietEnd))return false;
+  const state=data.proactiveState||DEF.proactiveState,today=day();
+  if(state.lastSentDay===today&&(state.sentToday||0)>=2)return false;
+  if(state.lastSentAt&&Date.now()-state.lastSentAt<Math.max(3,+data.settings.proactiveHours||8)*3600000)return false;
+  const lastUser=[...data.messages].reverse().find(m=>m.role==='user');if(lastUser&&Date.now()-lastUser.at<3*3600000)return false;
+  return Boolean(data.lastOpen&&(data.lastOpen!==today||state.lastSentAt));
+}
+async function proactiveMessage(force=false){
+  const now=new Date(),today=day(),life=roleLifeState(now),state=data.proactiveState={...DEF.proactiveState,...data.proactiveState,lastCheck:Date.now(),period:life.period,activity:life.activity,mood:life.mood};
+  if(!data.messages.length&&data.persona.first){data.messages.push({id:uid(),role:'assistant',text:data.persona.first,at:Date.now(),proactive:true});}
+  if(!proactiveAllowed(now,force)){data.lastOpen=today;save();renderProactiveStatus();return false;}
+  let text='';
+  if(data.api.mode==='api'&&data.api.url&&data.api.model){
+    try{text=await request([{role:'system',content:promptSystem('主动联系 当前状态 '+life.activity)+'\n\n你要根据当前生活状态主动联系陈钰。只发1到2句自然短消息，不写旁白，不编造重大事件，不重复催促回复。当前时间段：'+life.period+'；当前活动：'+life.activity+'；心情：'+life.mood+'。'},{role:'user',content:'生成这一次主动消息。'}]);}catch(error){console.warn('主动消息接口失败，使用本地状态消息',error);}
+  }
+  text=splitAssistantMessages(text)[0]||proactiveLocalText(life);
+  data.messages.push({id:uid(),role:'assistant',text,at:Date.now(),proactive:true});
+  state.lastSentAt=Date.now();state.sentToday=state.lastSentDay===today?(state.sentToday||0)+1:1;state.lastSentDay=today;data.lastOpen=today;detectMemory(text,'assistant');save();renderProactiveStatus();
+  if(data.settings.notifications&&typeof Notification!=='undefined'&&Notification.permission==='granted'&&document.hidden){try{new Notification(name(),{body:text})}catch(error){console.warn('通知发送失败',error)}}
+  return true;
+}
+$('#testProactive').onclick=async()=>{if(busy){alert('正在回复消息，请稍后再试。');return}$('#testProactive').disabled=true;try{const sent=await proactiveMessage(true);alert(sent?'测试主动消息已放进聊天。':'未生成消息。');}finally{$('#testProactive').disabled=false;}};
+$('#enableNotifications').onclick=async()=>{
+  if(typeof Notification==='undefined'){alert('当前 Safari 不支持此页面直接通知。iPhone 通常需要先添加到主屏幕，并使用支持推送的网页应用。');return;}
+  try{const permission=await Notification.requestPermission();data.settings.notifications=permission==='granted';save();alert(permission==='granted'?'通知已开启。网页完全关闭后仍不能保证后台生成消息。':'未获得通知权限。');}catch(error){alert('无法开启通知：'+error.message);}
+};
 try{
   theme();
   clock();
   loadLockWallpaper();
   loadMyAvatar();
   loadYanAvatar();
-  proactiveMessage();
+  proactiveMessage().catch(e=>console.warn('主动联系检查失败',e));
   home();
   setInterval(clock,30000);
+  setInterval(()=>proactiveMessage().catch(e=>console.warn('主动联系检查失败',e)),300000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)proactiveMessage().catch(e=>console.warn('主动联系检查失败',e));});
 }catch(e){
   console.error('初始化失败',e);
   alert('部分功能初始化失败，可尝试重新打开或恢复备份。');
