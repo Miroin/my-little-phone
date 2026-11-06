@@ -476,7 +476,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
     <label>卡片背景色</label>
     <input type="color" id="beautyCard" value="#fffaff">
   </div>
-     
+
 <div class="field">
   <label>💗 我的消息气泡</label>
   <input type="color" id="beautyMine" value="#eadcf5">
@@ -486,12 +486,12 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
   <label>🤍 角色消息气泡</label>
   <input type="color" id="beautyOther" value="#ffffff">
 </div>
-     
+
   <button type="button" class="btn" id="saveBeautyColors">
     保存自定义配色
   </button>
 </div>
-    
+
 <div class="card">
   <h3>🌄 锁屏壁纸</h3>
   <p class="muted">上传你喜欢的图片，打造专属锁屏。</p>
@@ -505,7 +505,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
     <button type="button" class="btn alt" id="resetLockWallpaper">恢复默认</button>
   </div>
 </div>
-    
+
     <div class="card">
       <h3>📦 主题管理</h3>
       <p class="muted">后续支持主题包导入、导出、预览和恢复默认。</p>
@@ -686,7 +686,7 @@ async function mediaAll(){
   }
 }
   let lockWallpaperUrl='';
-  
+
 async function loadLockWallpaper(){
 const items=await mediaAll();
 if(!items)return;
@@ -1213,7 +1213,7 @@ function retrieveMemories(query,limit=14){
 }
 function condense(){if(!data.settings.summarize)return;let end=Math.max(0,data.messages.length-(+data.settings.context||12));if(end<=data.summaryIndex+8)return;let old=data.messages.slice(data.summaryIndex,end).map(m=>(m.role==='user'?'我':'他')+': '+m.text.replace(/\s+/g,' ').slice(0,90)).join('\n');data.summary=(data.summary+'\n'+old).slice(-5000);data.summaryIndex=end}
 function normalizeUrl(x){x=x.trim();if(!x)return '';if(!/^https?:\/\//i.test(x))x='https://'+x;let u=new URL(x);if(!/^https?:$/.test(u.protocol))throw Error('只支持 HTTP/HTTPS');if(u.pathname==='/'||u.pathname==='')u.pathname='/v1/chat/completions';else if(u.pathname.replace(/\/$/,'')==='/v1')u.pathname='/v1/chat/completions';return u.toString()}
-async function request(messages){let a=data.api;if(!a.model||!a.url)throw Error('请填写接口地址和模型名');let ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),30000);try{let r=await fetch(normalizeUrl(a.url),{method:'POST',headers:{'Content-Type':'application/json',...(a.key?{'Authorization':'Bearer '+a.key}:{})},body:JSON.stringify({model:a.model,temperature:+a.temperature,messages}),signal:ctrl.signal});if(!r.ok)throw Error('HTTP '+r.status+'：'+(await r.text()).slice(0,240));let json=await r.json(),value=json?.choices?.[0]?.message?.content;if(Array.isArray(value))value=value.map(i=>i.text||'').join('');if(typeof value!=='string'||!value.trim())throw Error('没有收到模型的文本回复');return value.trim()}catch(e){if(e.name==='AbortError')throw Error('30 秒超时');if(e instanceof TypeError)throw Error('网络错误或浏览器 CORS 跨域拦截');throw e}finally{clearTimeout(timer)}}
+async function request(messages,options={}){let a=data.api;if(!a.model||!a.url)throw Error('请填写接口地址和模型名');const timeout=Math.max(1000,Number(options.timeout)||30000);let ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),timeout);try{let r=await fetch(normalizeUrl(a.url),{method:'POST',headers:{'Content-Type':'application/json',...(a.key?{'Authorization':'Bearer '+a.key}:{})},body:JSON.stringify({model:a.model,temperature:+a.temperature,messages}),signal:ctrl.signal});if(!r.ok)throw Error('HTTP '+r.status+'：'+(await r.text()).slice(0,240));let json=await r.json(),value=json?.choices?.[0]?.message?.content;if(Array.isArray(value))value=value.map(i=>i.text||'').join('');if(typeof value!=='string'||!value.trim())throw Error('没有收到模型的文本回复');return value.trim()}catch(e){if(e.name==='AbortError')throw Error(Math.round(timeout/1000)+' 秒超时');if(e instanceof TypeError)throw Error('网络错误或浏览器 CORS 跨域拦截');throw e}finally{clearTimeout(timer)}}
 function splitAssistantMessages(raw){
   const source=String(raw||'').replace(/\r/g,'').trim();
   if(!source)return [];
@@ -1617,7 +1617,7 @@ async function renderStickerLibrary(){
 
     const send=node('button','','发送');
     send.type='button';
-   
+
 send.onclick=async()=>{
   if(busy){
     alert('沈砚正在回复，请稍等一下。');
@@ -1874,7 +1874,8 @@ $('#historyPick').onclick=()=>$('#historyInput').click();
 $('#historyInput').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{const raw=await file.text(),fingerprint=historyFingerprint(raw);if((data.historyMigration.imports||[]).some(x=>x.fingerprint===fingerprint))throw Error('这个文件已经迁移过，已阻止重复导入');const messages=parseHistoryFile(raw,file.name),roles={user:messages.filter(x=>x.role==='user').length,assistant:messages.filter(x=>x.role==='assistant').length};historyDraft={fileName:file.name,fingerprint,messages,importId:'history-'+fingerprint};$('#historyPreview').hidden=false;$('#historySummary').textContent='文件：'+file.name+'\n有效文字消息：'+messages.length+' 条｜忽略非文字内容：'+(messages.skippedNonText||0)+' 条\n陈钰：'+roles.user+' 条｜沈砚：'+roles.assistant+' 条\n时间：'+date(messages[0].at)+' 至 '+date(messages[messages.length-1].at);$('#historyStatus').textContent='解析成功，目前仅预览，尚未写入。';$('#historyProgress').value=0}catch(error){alert('历史聊天读取失败：'+error.message)}finally{e.target.value=''}};
 async function prepareHistoryArchive(){if(!historyDraft)throw Error('请先选择聊天文件');await historyStore(historyDraft.messages,historyDraft.importId);if(!(data.historyMigration.imports||[]).some(x=>x.fingerprint===historyDraft.fingerprint)){data.historyMigration.imports.push({id:historyDraft.importId,fingerprint:historyDraft.fingerprint,fileName:historyDraft.fileName,messageCount:historyDraft.messages.length,archivedAt:Date.now(),status:'archived'});data.historyMigration.lastImportId=historyDraft.importId;save()}}
 $('#historyLocalExtract').onclick=async()=>{try{await prepareHistoryArchive();historyCandidates=historyLocalCandidates(historyDraft.messages);$('#historyProgress').value=100;renderHistoryCandidates()}catch(error){alert(error.message)}};
-$('#historyExtract').onclick=async()=>{if(data.api.mode!=='api')return alert('请先在“接口与模型”启用 DeepSeek 接口模式。');const button=$('#historyExtract');button.disabled=true;try{await prepareHistoryArchive();historyCandidates=[];const chunks=[];for(let i=0;i<historyDraft.messages.length;i+=35)chunks.push(historyDraft.messages.slice(i,i+35));for(let i=0;i<chunks.length;i++){const transcript=chunks[i].map(m=>(m.role==='user'?'陈钰':'沈砚')+'｜'+new Date(m.at).toISOString()+'｜'+m.text).join('\n');const answer=await request([{role:'system',content:'你是聊天记忆迁移器。只提取对未来相处有用、能由原文支持的稳定事实、共同经历、感情发展、重要约定和生活细节。不要把临时寒暄、角色扮演指令、系统提示或猜测当记忆。输出严格 JSON 数组，每项仅含 text、category、evidenceAt；category只能是用户资料、用户偏好、共同经历、角色经历、约定计划、其他之一。没有内容则输出 []。'},{role:'user',content:transcript}]);let parsed=JSON.parse(String(answer).replace(/^```(?:json)?\s*|\s*```$/g,''));if(!Array.isArray(parsed))throw Error('第 '+(i+1)+' 批返回格式不正确');for(const x of parsed){const text=memoryClean(x.text);if(!text||historyCandidates.some(y=>memorySimilarity(y.text,text)>.82))continue;historyCandidates.push({id:uid(),text,category:MEMORY_CATEGORIES.includes(x.category)?x.category:'其他',evidenceAt:Date.parse(x.evidenceAt)||chunks[i][0].at,selected:true})}$('#historyProgress').value=Math.round((i+1)*100/chunks.length);renderHistoryCandidates();await new Promise(r=>setTimeout(r,180))}}catch(error){alert('提取暂停：'+error.message+'。已完成的候选仍可检查，稍后可重试。')}finally{button.disabled=false;renderHistoryCandidates()}};
+async function historyRequestWithRetry(messages){let lastError;for(let attempt=1;attempt<=3;attempt++){try{return await request(messages,{timeout:120000})}catch(error){lastError=error;if(attempt<3){$('#historyStatus').textContent='本批处理较慢，正在第 '+(attempt+1)+' 次重试…';await new Promise(resolve=>setTimeout(resolve,1200*attempt))}}}throw lastError}
+$('#historyExtract').onclick=async()=>{if(data.api.mode!=='api')return alert('请先在“接口与模型”启用 DeepSeek 接口模式。');const button=$('#historyExtract');button.disabled=true;try{await prepareHistoryArchive();historyCandidates=[];const chunks=[];for(let i=0;i<historyDraft.messages.length;i+=20)chunks.push(historyDraft.messages.slice(i,i+20));for(let i=0;i<chunks.length;i++){const transcript=chunks[i].map(m=>(m.role==='user'?'陈钰':'沈砚')+'｜'+new Date(m.at).toISOString()+'｜'+m.text).join('\n');const answer=await historyRequestWithRetry([{role:'system',content:'你是聊天记忆迁移器。只提取对未来相处有用、能由原文支持的稳定事实、共同经历、感情发展、重要约定和生活细节。不要把临时寒暄、角色扮演指令、系统提示或猜测当记忆。输出严格 JSON 数组，每项仅含 text、category、evidenceAt；category只能是用户资料、用户偏好、共同经历、角色经历、约定计划、其他之一。没有内容则输出 []。'},{role:'user',content:transcript}]);let parsed=JSON.parse(String(answer).replace(/^```(?:json)?\s*|\s*```$/g,''));if(!Array.isArray(parsed))throw Error('第 '+(i+1)+' 批返回格式不正确');for(const x of parsed){const text=memoryClean(x.text);if(!text||historyCandidates.some(y=>memorySimilarity(y.text,text)>.82))continue;historyCandidates.push({id:uid(),text,category:MEMORY_CATEGORIES.includes(x.category)?x.category:'其他',evidenceAt:Date.parse(x.evidenceAt)||chunks[i][0].at,selected:true})}$('#historyProgress').value=Math.round((i+1)*100/chunks.length);renderHistoryCandidates();await new Promise(r=>setTimeout(r,180))}}catch(error){alert('提取暂停：'+error.message+'。已完成的候选仍可检查，稍后可重试。')}finally{button.disabled=false;renderHistoryCandidates()}};
 $('#historyApply').onclick=()=>{const chosen=historyCandidates.filter(x=>x.selected!==false);if(!chosen.length)return alert('没有选中记忆');if(!confirm('确认把选中的 '+chosen.length+' 条候选写入长期记忆？原始聊天不会被删除。'))return;let added=0;for(const x of chosen){const item=remember(x.text,{source:'history:'+historyDraft.importId,category:x.category});if(item){item.evidenceAt=x.evidenceAt;item.importId=historyDraft.importId;added++}}const meta=data.historyMigration.imports.find(x=>x.id===historyDraft.importId);if(meta){meta.status='applied';meta.appliedAt=Date.now();meta.candidateCount=chosen.length}save();alert('迁移完成：处理 '+chosen.length+' 条，写入或合并 '+added+' 条。原始聊天归档仍保留。');show('memory')};
 $('#historySearchBtn').onclick=async()=>{const q=memoryClean($('#historySearch').value),box=$('#historySearchResult');box.replaceChildren();if(!q)return;const list=(await historyAll()).filter(x=>x.text.includes(q)).sort((a,b)=>a.at-b.at).slice(0,100);if(!list.length)return box.append(node('div','empty','没有找到'));for(const x of list)box.append(node('div','card',(x.role==='user'?'陈钰':'沈砚')+' · '+date(x.at)+'\n'+x.text))};
 function voiceFavorites(){
