@@ -2013,40 +2013,49 @@ $('#backupInput').onchange=async e=>{
   }
 };
 
-/* 独立重置角色数据：保留世界书、个人资料和素材库 */
+
+/* 安全重置临时角色：保留世界书、个人资料和素材库 */
 async function resetTemporaryCharacter(){
   if(busy){
-    alert('正在回复消息，请等回复结束后再重置。');
-    return;
-  }
-
-  if(!confirm(
-    '确定重置临时角色吗？\n\n'+
-    '将删除：聊天、长期记忆、人设卡、角色资料、'+
-    '朋友圈、备忘、通话记录及旧角色头像。\n\n'+
-    '保留：世界书、你的个人资料、相册、表情包、'+
-    '音乐、壁纸、API 配置和美化设置。\n\n'+
-    '此操作不可撤销。'
-  ))return;
-
-  if(prompt('最后确认：请输入“重置角色”')!=='重置角色'){
-    alert('已取消，没有删除任何数据。');
+    alert('正在回复消息，请等待回复结束。');
     return;
   }
 
   const items=await mediaAll();
+
   if(items===null){
     alert('媒体库读取失败，已取消重置。');
     return;
   }
 
-  const previous=copy(data);
-  const myAvatarId=data.avatarSlots?.my||'my-avatar';
+  if(!confirm(
+    '确定重置临时角色吗？\n\n'+
+    '将删除聊天、通话、朋友圈、备忘、长期记忆、'+
+    '人设卡、角色资料和当前角色头像。\n\n'+
+    '保留世界书、你的资料、图库、表情包、音乐、'+
+    '其他历史头像、壁纸、API 和美化设置。\n\n'+
+    '此操作不可撤销。'
+  ))return;
 
-  // 只清理头像素材；保留当前使用的本人头像。
-  // 照片、表情包、音乐、壁纸均不删除。
-  const avatarItems=items.filter(item=>
-    item.kind==='avatar'&&item.id!==myAvatarId
+  if(prompt('请输入“重置角色”确认')!=='重置角色'){
+    alert('已取消，没有删除任何数据。');
+    return;
+  }
+
+  const previous=copy(data);
+
+  const myAvatarId=
+    data.avatarSlots?.my||'my-avatar';
+
+  const yanAvatarId=
+    data.avatarSlots?.yan||'yan-avatar';
+
+  // 只允许删除当前角色使用的头像。
+  // 本人正在使用的头像绝对不删除。
+  const targetAvatar=items.find(item=>
+    item.kind==='avatar'&&
+    item.id===yanAvatarId&&
+    item.id!==myAvatarId
   );
 
   const next=copy(data);
@@ -2058,7 +2067,9 @@ async function resetTemporaryCharacter(){
   next.notes=[];
   next.summary='';
   next.summaryIndex=0;
+
   next.persona=copy(DEF.persona);
+
   next.yanProfile={
     name:'',
     signature:'',
@@ -2067,17 +2078,18 @@ async function resetTemporaryCharacter(){
   };
 
   next.settings.name='';
-  next.lastOpen=day();
   next.today='';
   next.todayText='';
+  next.lastOpen=day();
 
+  // 使用非空占位 ID，防止旧版默认头像回退。
   next.avatarSlots={
     ...next.avatarSlots,
     my:myAvatarId,
-    yan:''
+    yan:'no-character-avatar'
   };
 
-  // 保留 world、myProfile、api、主题及其他设置。
+  // world、myProfile、api、主题和其他设置不动。
   data=next;
 
   if(!save()){
@@ -2086,43 +2098,42 @@ async function resetTemporaryCharacter(){
     return;
   }
 
-  try{
-    const database=await db();
+  if(targetAvatar){
+    const deleted=await mediaDelete(targetAvatar.id);
 
-    await new Promise((resolve,reject)=>{
-      const tx=database.transaction('files','readwrite');
-      const store=tx.objectStore('files');
+    if(!deleted){
+      data=previous;
 
-      for(const item of avatarItems){
-        store.delete(item.id);
+      if(!save()){
+        alert(
+          '头像删除失败，且文字数据恢复失败。'+
+          '请使用此前的备份恢复。'
+        );
+      }else{
+        alert(
+          '头像删除失败，文字数据已恢复。'+
+          '请检查媒体库后重试。'
+        );
       }
-
-      tx.oncomplete=resolve;
-      tx.onerror=()=>reject(tx.error);
-      tx.onabort=()=>reject(tx.error);
-    });
-  }catch(err){
-    data=previous;
-
-    if(!save()){
-      alert('头像清理失败，且文字数据恢复失败。请使用备份恢复。');
       return;
     }
-
-    alert('头像清理失败，文字数据已恢复：'+err.message);
-    return;
   }
 
   forgetUrls();
+
   await refresh();
-  await loadYanAvatar();
   await loadMyAvatar();
+  await loadYanAvatar();
 
   theme();
   home();
   await stats();
 
-  alert('角色数据重置完成。世界书、图库、表情包及设置均已保留。');
+  alert(
+    '角色数据重置完成。\n\n'+
+    '世界书、你的资料、图库、表情包、'+
+    '音乐、其他历史头像和系统设置均已保留。'
+  );
 }
 
 // 在备份页面创建独立的重置入口
