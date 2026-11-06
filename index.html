@@ -2014,10 +2014,26 @@ $('#backupInput').onchange=async e=>{
 };
 
 
-/* 安全重置临时角色：保留世界书、个人资料和素材库 */
+
+/* 安全重置临时角色：保留沈砚名字、世界书和素材库 */
 async function resetTemporaryCharacter(){
   if(busy){
     alert('正在回复消息，请等待回复结束。');
+    return;
+  }
+
+  if(!confirm(
+    '确定重置临时角色吗？\n\n'+
+    '将清除聊天、通话、朋友圈、备忘、长期记忆、'+
+    '角色资料、人设卡和关系经历。\n\n'+
+    '保留沈砚的名字、世界书、你的个人资料、'+
+    '图库、表情包、音乐、壁纸、API 和美化设置。\n\n'+
+    '当前角色头像将解除使用，但头像文件暂时保留。\n\n'+
+    '此操作不可撤销。'
+  ))return;
+
+  if(prompt('请输入“重置角色”确认')!=='重置角色'){
+    alert('已取消，没有修改任何数据。');
     return;
   }
 
@@ -2028,97 +2044,65 @@ async function resetTemporaryCharacter(){
     return;
   }
 
-  if(!confirm(
-    '确定重置临时角色吗？\n\n'+
-    '将删除聊天、通话、朋友圈、备忘、长期记忆、'+
-    '人设卡、角色资料和当前角色头像。\n\n'+
-    '保留世界书、你的资料、图库、表情包、音乐、'+
-    '其他历史头像、壁纸、API 和美化设置。\n\n'+
-    '此操作不可撤销。'
-  ))return;
-
-  if(prompt('请输入“重置角色”确认')!=='重置角色'){
-    alert('已取消，没有删除任何数据。');
-    return;
-  }
-
   const previous=copy(data);
-
-  const myAvatarId=
-    data.avatarSlots?.my||'my-avatar';
-
-  const yanAvatarId=
-    data.avatarSlots?.yan||'yan-avatar';
-
-  // 只允许删除当前角色使用的头像。
-  // 本人正在使用的头像绝对不删除。
-  const targetAvatar=items.find(item=>
-    item.kind==='avatar'&&
-    item.id===yanAvatarId&&
-    item.id!==myAvatarId
-  );
-
   const next=copy(data);
 
+  // 清除临时角色的聊天和互动记录
   next.messages=[];
   next.memories=[];
   next.calls=[];
   next.moments=[];
   next.notes=[];
+
+  // 清除聊天摘要
   next.summary='';
   next.summaryIndex=0;
 
-  next.persona=copy(DEF.persona);
+  // 保留角色名字，其余人设字段恢复空白
+  next.persona={
+    ...copy(DEF.persona),
+    name:'沈砚'
+  };
 
+  // 清空临时角色资料，但保留名字
   next.yanProfile={
-    name:'',
+    name:'沈砚',
     signature:'',
     id:'',
     categories:{}
   };
 
+  // 清除旧的显示名覆盖，使用人设中的名字
   next.settings.name='';
+
+  // 清除日常互动状态
   next.today='';
   next.todayText='';
   next.lastOpen=day();
 
-  // 使用非空占位 ID，防止旧版默认头像回退。
+  // 保留本人头像，解除临时角色头像的使用关系
   next.avatarSlots={
     ...next.avatarSlots,
-    my:myAvatarId,
+    my:data.avatarSlots?.my||'my-avatar',
     yan:'no-character-avatar'
   };
 
-  // world、myProfile、api、主题和其他设置不动。
+  // 保留：
+  // next.world
+  // next.myProfile
+  // next.api
+  // next.settings 中其他系统配置
+  // IndexedDB 中的全部图库、表情包、音乐和头像素材
+
   data=next;
 
   if(!save()){
     data=previous;
-    alert('文字数据保存失败，已取消重置。');
+    alert('保存失败，已取消重置。');
     return;
   }
 
-  if(targetAvatar){
-    const deleted=await mediaDelete(targetAvatar.id);
-
-    if(!deleted){
-      data=previous;
-
-      if(!save()){
-        alert(
-          '头像删除失败，且文字数据恢复失败。'+
-          '请使用此前的备份恢复。'
-        );
-      }else{
-        alert(
-          '头像删除失败，文字数据已恢复。'+
-          '请检查媒体库后重试。'
-        );
-      }
-      return;
-    }
-  }
-
+  // 刷新显示，不物理删除媒体文件
   forgetUrls();
 
   await refresh();
@@ -2130,12 +2114,13 @@ async function resetTemporaryCharacter(){
   await stats();
 
   alert(
-    '角色数据重置完成。\n\n'+
+    '临时角色数据已重置。\n\n'+
+    '沈砚的名字已保留。\n'+
     '世界书、你的资料、图库、表情包、'+
-    '音乐、其他历史头像和系统设置均已保留。'
+    '音乐、头像素材和系统设置均已保留。\n\n'+
+    '现在可以导入正式角色卡和记忆。'
   );
 }
-
 // 在备份页面创建独立的重置入口
 const resetCharacterCard=document.createElement('div');
 resetCharacterCard.className='card';
