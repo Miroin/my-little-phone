@@ -1704,7 +1704,159 @@ $('#recallNotesTab').onclick=()=>{
 };
 /* 十一、人设卡：完整表单、兼容常见 JSON 字段和纯文本导入。 */
 const P=[['name','他叫什么'],['callme','他怎么称呼我'],['personality','他的性子和说话方式'],['catchphrase','口头禅'],['taboo','绝不说的话（雷区）'],['first','开口第一句'],['extra','还要记住的别的事'],['birthday','生日'],['zodiac','星座'],['hobbies','爱好'],['signature','一句签名']];function persona(){let b=$('#personaFields');b.replaceChildren();for(let [k,label] of P){let d=node('div','field'),l=node('label','',label),inp=document.createElement(['name','callme','birthday','zodiac','hobbies'].includes(k)?'input':'textarea');inp.id='p_'+k;inp.value=data.persona[k]||'';d.append(l,inp);b.append(d)}}$('#personaForm').onsubmit=e=>{e.preventDefault();for(let[k]of P)data.persona[k]=$('#p_'+k).value;save();home();alert('人设已保存，下一次对话生效')};$('#personaImport').onclick=()=>$('#personaInput').click();$('#personaInput').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let t=await f.text(),obj={};if(f.name.endsWith('.json')||t.trim().startsWith('{')){let x=JSON.parse(t);x=x.data||x.character||x;let alias={name:['name','角色名'],callme:['callme','nickname','称呼'],personality:['personality','description','性格'],catchphrase:['catchphrase','口头禅'],taboo:['taboo','雷区'],first:['first','first_mes','first_message','opening'],extra:['extra','scenario','system_prompt','补充设定'],birthday:['birthday'],zodiac:['zodiac'],hobbies:['hobbies'],signature:['signature']};for(let [k,keys]of Object.entries(alias))for(let key of keys)if(x[key]!=null){obj[k]=typeof x[key]==='string'?x[key]:JSON.stringify(x[key]);break}if(!Object.keys(obj).length)obj.extra=t}else{let aliases={'姓名':'name','名字':'name','角色名':'name','称呼':'callme','性格':'personality','说话方式':'personality','口头禅':'catchphrase','雷区':'taboo','开场白':'first','第一句':'first','补充设定':'extra','生日':'birthday','星座':'zodiac','爱好':'hobbies','签名':'signature'};let other=[];for(let line of t.split(/\r?\n/)){let m=line.match(/^\s*([^:：]{1,18})[:：]\s*(.*)$/);if(m&&aliases[m[1].trim()])obj[aliases[m[1].trim()]]=m[2];else other.push(line)}if(other.join('').trim())obj.extra=(obj.extra||'')+'\n'+other.join('\n')}Object.assign(data.persona,obj);save();persona();alert('已导入人设，请检查所有字段')}catch(err){alert('人设导入失败：'+err.message)}e.target.value=''};
-  
+
+/* 新版角色卡导入：支持中文 JSON，保留未知字段 */
+$('#personaInput').onchange=async function(e){
+  const file=e.target.files?.[0];
+  if(!file)return;
+
+  try{
+    const text=await file.text();
+    const trimmed=text.trim();
+    const imported={};
+    const extras=[];
+
+    const aliases={
+      name:['他叫什么','name','角色名','姓名','名字'],
+      callme:['他怎么称呼我','callme','nickname','称呼'],
+      personality:[
+        '他的性子和说话方式',
+        'personality','description','性格','说话方式'
+      ],
+      catchphrase:['口头禅','catchphrase'],
+      taboo:['绝不说的话（雷区）','taboo','雷区'],
+      first:[
+        '开口第一句','first','first_mes',
+        'first_message','opening','开场白'
+      ],
+      extra:[
+        '还要记住的别的事','extra',
+        'scenario','system_prompt','补充设定'
+      ],
+      birthday:['生日','birthday'],
+      zodiac:['星座','zodiac'],
+      hobbies:['爱好','hobbies'],
+      signature:['一句签名','signature','签名']
+    };
+
+    const stringify=value=>
+      typeof value==='string'
+        ?value
+        :JSON.stringify(value,null,2);
+
+    if(file.name.toLowerCase().endsWith('.json')||
+       trimmed.startsWith('{')){
+
+      const parsed=JSON.parse(text);
+      const source=parsed?.data||parsed?.character||parsed;
+
+      if(!source||typeof source!=='object'||
+         Array.isArray(source)){
+        throw Error('角色卡必须是 JSON 对象');
+      }
+
+      const recognized=new Set();
+
+      for(const [field,keys] of Object.entries(aliases)){
+        for(const key of keys){
+          if(!Object.prototype.hasOwnProperty.call(source,key))continue;
+
+          recognized.add(key);
+          const value=source[key];
+
+          if(value!==null&&value!==undefined&&
+             imported[field]===undefined){
+            imported[field]=stringify(value);
+          }
+        }
+      }
+
+      for(const [key,value] of Object.entries(source)){
+        if(!recognized.has(key)){
+          extras.push(key+'：'+stringify(value));
+        }
+      }
+
+    }else{
+      const lookup={};
+
+      for(const [field,keys] of Object.entries(aliases)){
+        for(const key of keys)lookup[key]=field;
+      }
+
+      const unmatched=[];
+
+      for(const line of text.split(/\r?\n/)){
+        const match=line.match(/^\s*([^:：]{1,40})[:：]\s*(.*)$/);
+
+        if(match&&lookup[match[1].trim()]){
+          const field=lookup[match[1].trim()];
+          imported[field]=imported[field]
+            ?imported[field]+'\n'+match[2]
+            :match[2];
+        }else{
+          unmatched.push(line);
+        }
+      }
+
+      if(unmatched.join('\n').trim()){
+        extras.push(unmatched.join('\n'));
+      }
+    }
+
+    if(extras.length){
+      const extraText=extras.join('\n\n');
+
+      imported.extra=[
+        imported.extra||'',
+        '【未分类的原始角色设定】',
+        extraText
+      ].filter(Boolean).join('\n\n');
+    }
+
+    if(!Object.keys(imported).length){
+      throw Error('没有找到可导入的角色设定');
+    }
+
+    const fields=Object.keys(imported);
+
+    if(!confirm(
+      '识别到 '+fields.length+' 个角色设定栏目。\n\n'+
+      '将更新对应人设字段，其他系统数据不受影响。\n\n'+
+      '是否继续导入？'
+    ))return;
+
+    const previous=copy(data.persona);
+
+    data.persona={
+      ...data.persona,
+      ...imported
+    };
+
+    if(!save()){
+      data.persona=previous;
+      throw Error('保存失败，原有人设已恢复');
+    }
+
+    persona();
+    home();
+
+    alert(
+      '角色卡导入成功！\n\n'+
+      '已更新 '+fields.length+' 个栏目。\n'+
+      (extras.length
+        ?'未识别的字段已放入补充设定。\n'
+        :'')+
+      '请检查人设卡内容。'
+    );
+
+  }catch(err){
+    alert('角色卡导入失败：'+err.message);
+  }finally{
+    e.target.value='';
+  }
+};
+
 function renderRoleProfileEditor(target,items){
   const box=target==='my'
     ?$('#roleMyProfileEditor')
