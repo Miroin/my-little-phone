@@ -1342,6 +1342,18 @@ function splitAssistantMessages(raw){
   }
 }
 
+function localAnswer(t){
+  const p=data.persona||{},text=String(t||'');
+  if(/记住/.test(text))return '记下了，我会把这件事放在心上。';
+  if(/晚安|睡觉/.test(text))return '晚安，先好好休息。';
+  if(/早安|早上好/.test(text))return '早安。新的一天开始了。';
+  if(/你好|嗨|hello|hi/i.test(text))return p.first||'你来了。今天怎么样？';
+  if(/想你|喜欢|爱你/.test(text))return '嗯，听见了。我也在想你。';
+  if(/伤心|难过|累|烦/.test(text))return '辛苦了。你慢慢说，我听着。';
+  if(/吃|饿|饭/.test(text))return '先好好吃点东西，别饿着自己。';
+  if(/[？?]/.test(text))return '这个问题挺有意思。让我想想。';
+  return ['我在认真听，后来呢？','这件事对你来说很重要吧。','嗯，你继续说。'][text.length%3];
+}
 async function deliverAssistantReply(contextText){
   let shown=0;
   let previous='';
