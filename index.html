@@ -1702,152 +1702,295 @@ $('#recallNotesTab').onclick=()=>{
   switchRecallTab('notes');
   notes();
 };
-/* 十一、人设卡：完整表单、兼容常见 JSON 字段和纯文本导入。 */
-const P=[['name','他叫什么'],['callme','他怎么称呼我'],['personality','他的性子和说话方式'],['catchphrase','口头禅'],['taboo','绝不说的话（雷区）'],['first','开口第一句'],['extra','还要记住的别的事'],['birthday','生日'],['zodiac','星座'],['hobbies','爱好'],['signature','一句签名']];function persona(){let b=$('#personaFields');b.replaceChildren();for(let [k,label] of P){let d=node('div','field'),l=node('label','',label),inp=document.createElement(['name','callme','birthday','zodiac','hobbies'].includes(k)?'input':'textarea');inp.id='p_'+k;inp.value=data.persona[k]||'';d.append(l,inp);b.append(d)}}$('#personaForm').onsubmit=e=>{e.preventDefault();for(let[k]of P)data.persona[k]=$('#p_'+k).value;save();home();alert('人设已保存，下一次对话生效')};$('#personaImport').onclick=()=>$('#personaInput').click();$('#personaInput').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let t=await f.text(),obj={};if(f.name.endsWith('.json')||t.trim().startsWith('{')){let x=JSON.parse(t);x=x.data||x.character||x;let alias={name:['name','角色名'],callme:['callme','nickname','称呼'],personality:['personality','description','性格'],catchphrase:['catchphrase','口头禅'],taboo:['taboo','雷区'],first:['first','first_mes','first_message','opening'],extra:['extra','scenario','system_prompt','补充设定'],birthday:['birthday'],zodiac:['zodiac'],hobbies:['hobbies'],signature:['signature']};for(let [k,keys]of Object.entries(alias))for(let key of keys)if(x[key]!=null){obj[k]=typeof x[key]==='string'?x[key]:JSON.stringify(x[key]);break}if(!Object.keys(obj).length)obj.extra=t}else{let aliases={'姓名':'name','名字':'name','角色名':'name','称呼':'callme','性格':'personality','说话方式':'personality','口头禅':'catchphrase','雷区':'taboo','开场白':'first','第一句':'first','补充设定':'extra','生日':'birthday','星座':'zodiac','爱好':'hobbies','签名':'signature'};let other=[];for(let line of t.split(/\r?\n/)){let m=line.match(/^\s*([^:：]{1,18})[:：]\s*(.*)$/);if(m&&aliases[m[1].trim()])obj[aliases[m[1].trim()]]=m[2];else other.push(line)}if(other.join('').trim())obj.extra=(obj.extra||'')+'\n'+other.join('\n')}Object.assign(data.persona,obj);save();persona();alert('已导入人设，请检查所有字段')}catch(err){alert('人设导入失败：'+err.message)}e.target.value=''};
 
-/* 新版角色卡导入：支持中文 JSON，保留未知字段 */
-$('#personaInput').onchange=async function(e){
+/* 十一、人设卡：自然语言人物档案导入 */
+
+const P=[
+  ['name','他叫什么'],
+  ['callme','他怎么称呼我'],
+  ['personality','他的性子和说话方式'],
+  ['catchphrase','口头禅'],
+  ['taboo','绝不说的话（雷区）'],
+  ['first','开口第一句'],
+  ['extra','完整人物档案'],
+  ['birthday','生日'],
+  ['zodiac','星座'],
+  ['hobbies','爱好'],
+  ['signature','一句签名']
+];
+
+function persona(){
+  const box=$('#personaFields');
+  box.replaceChildren();
+
+  for(const [key,label] of P){
+    const field=node('div','field');
+    const title=node('label','',label);
+    const input=document.createElement(
+      ['name','callme','birthday','zodiac','hobbies'].includes(key)
+        ?'input':'textarea'
+    );
+
+    input.id='p_'+key;
+    input.value=data.persona[key]||'';
+
+    if(key==='extra'){
+      input.style.minHeight='300px';
+    }
+
+    field.append(title,input);
+    box.append(field);
+  }
+}
+
+$('#personaForm').onsubmit=e=>{
+  e.preventDefault();
+
+  for(const [key] of P){
+    data.persona[key]=$('#p_'+key).value;
+  }
+
+  if(save()){
+    home();
+    alert('人物档案已保存，下次对话生效。');
+  }
+};
+
+$('#personaImport').onclick=()=>{
+  $('#personaInput').click();
+};
+
+const CHARACTER_SECTIONS=[
+  '基本资料',
+  '性格与行为',
+  '恋爱与亲密关系',
+  '个人经历',
+  '生活与兴趣',
+  '共同经历与记忆'
+];
+
+function characterSection(path){
+  const s=path.join(' ').toLowerCase();
+
+  if(/共同|回忆|记忆|约定|相识|相遇|我们|一起经历|重要事件/.test(s)){
+    return 5;
+  }
+
+  if(/恋爱|亲密|关系|爱人|伴侣|男友|情侣|情感|占有|吃醋|称呼|边界|接吻|拥抱/.test(s)){
+    return 2;
+  }
+
+  if(/性格|行为|说话|语气|语言|表达|原则|底线|雷区|口头禅|心理|情绪|脾气/.test(s)){
+    return 1;
+  }
+
+  if(/家庭|成长|童年|过去|经历|教育|学校|求学|职业经历|工作经历|背景|人生/.test(s)){
+    return 3;
+  }
+
+  if(/姓名|名字|年龄|生日|身高|体重|外貌|长相|五官|发型|身份|性别|基本资料/.test(s)){
+    return 0;
+  }
+
+  return 4;
+}
+
+function isTechnicalCharacterKey(key){
+  const s=String(key).trim();
+
+  return /^(version|schema|format|metadata|meta|revision|changelog|updated_at|created_at|id|uuid)$/i.test(s)
+    || /^v\d+(?:[._]\d+)*(?:_|$)/i.test(s)
+    || /^(版本|版本号|修订记录|更新日志|技术说明|导入说明|文件格式|数据结构|元数据)$/.test(s);
+}
+
+function isVersionContainer(key){
+  return /^v\d+(?:[._]\d+)*(?:_|$)/i.test(String(key))
+    || /^(data|character|角色卡|完整原始档案|原始档案|分章节|后续补全|人物档案)$/.test(String(key));
+}
+
+function normalizeCharacterText(value){
+  return String(value??'')
+    .replace(/\r/g,'')
+    .replace(/^\s*(?:[-*•]\s*)+/gm,'')
+    .trim();
+}
+
+function buildNaturalCharacterCard(source){
+  const groups=CHARACTER_SECTIONS.map(()=>[]);
+  const seen=new Set();
+  const found={};
+  let count=0;
+
+  const aliases={
+    name:/^(他叫什么|姓名|名字|角色名|name)$/,
+    callme:/^(他怎么称呼我|称呼用户|callme|nickname)$/,
+    personality:/^(他的性子和说话方式|personality)$/,
+    catchphrase:/^(口头禅|catchphrase)$/,
+    taboo:/^(绝不说的话（雷区）|taboo)$/,
+    first:/^(开口第一句|first_mes|first_message|opening)$/,
+    birthday:/^(生日|birthday)$/,
+    zodiac:/^(星座|zodiac)$/,
+    hobbies:/^(爱好|hobbies)$/,
+    signature:/^(一句签名|signature)$/
+  };
+
+  function add(path,value){
+    const text=normalizeCharacterText(value);
+    if(!text)return;
+
+    const key=path[path.length-1]||'';
+    const fingerprint=text.toLowerCase().replace(/\s+/g,'');
+
+    if(seen.has(fingerprint))return;
+    seen.add(fingerprint);
+
+    for(const [field,pattern] of Object.entries(aliases)){
+      if(pattern.test(key)&&!found[field]){
+        found[field]=text;
+        break;
+      }
+    }
+
+    const section=characterSection(path);
+    const naturalKey=isVersionContainer(key)||isTechnicalCharacterKey(key)
+      ?'':key;
+
+    groups[section].push(
+      naturalKey?naturalKey+'：'+text:text
+    );
+
+    count++;
+  }
+
+  function walk(value,path=[],depth=0){
+    if(depth>40)return;
+    if(value===null||value===undefined)return;
+
+    if(Array.isArray(value)){
+      for(const item of value){
+        walk(item,path,depth+1);
+      }
+      return;
+    }
+
+    if(typeof value==='object'){
+      for(const [key,child] of Object.entries(value)){
+        if(isTechnicalCharacterKey(key)){
+          if(isVersionContainer(key)&&
+             child&&typeof child==='object'){
+            walk(child,path,depth+1);
+          }
+          continue;
+        }
+
+        if(isVersionContainer(key)){
+          walk(child,path,depth+1);
+        }else{
+          walk(child,[...path,key],depth+1);
+        }
+      }
+      return;
+    }
+
+    if(typeof value!=='string'&&typeof value!=='number'){
+      return;
+    }
+
+    const text=normalizeCharacterText(value);
+    if(!text)return;
+
+    if(/^v?\d+(?:\.\d+){1,3}$/i.test(text))return;
+
+    add(path,text);
+  }
+
+  walk(source);
+
+  const sections=groups
+    .map((lines,i)=>lines.length
+      ?'【'+CHARACTER_SECTIONS[i]+'】\n'+lines.join('\n\n')
+      :'')
+    .filter(Boolean);
+
+  return {
+    fields:found,
+    text:sections.join('\n\n'),
+    count,
+    sections:sections.length
+  };
+}
+
+$('#personaInput').onchange=async e=>{
   const file=e.target.files?.[0];
   if(!file)return;
 
   try{
-    const text=await file.text();
-    const trimmed=text.trim();
-    const imported={};
-    const extras=[];
+    const raw=await file.text();
+    const trimmed=raw.trim();
 
-    const aliases={
-      name:['他叫什么','name','角色名','姓名','名字'],
-      callme:['他怎么称呼我','callme','nickname','称呼'],
-      personality:[
-        '他的性子和说话方式',
-        'personality','description','性格','说话方式'
-      ],
-      catchphrase:['口头禅','catchphrase'],
-      taboo:['绝不说的话（雷区）','taboo','雷区'],
-      first:[
-        '开口第一句','first','first_mes',
-        'first_message','opening','开场白'
-      ],
-      extra:[
-        '还要记住的别的事','extra',
-        'scenario','system_prompt','补充设定'
-      ],
-      birthday:['生日','birthday'],
-      zodiac:['星座','zodiac'],
-      hobbies:['爱好','hobbies'],
-      signature:['一句签名','signature','签名']
-    };
+    if(!trimmed){
+      throw Error('文件内容为空');
+    }
 
-    const stringify=value=>
-      typeof value==='string'
-        ?value
-        :JSON.stringify(value,null,2);
+    let result;
 
-    if(file.name.toLowerCase().endsWith('.json')||
-       trimmed.startsWith('{')){
-
-      const parsed=JSON.parse(text);
-      const source=parsed?.data||parsed?.character||parsed;
-
-      if(!source||typeof source!=='object'||
-         Array.isArray(source)){
-        throw Error('角色卡必须是 JSON 对象');
-      }
-
-      const recognized=new Set();
-
-      for(const [field,keys] of Object.entries(aliases)){
-        for(const key of keys){
-          if(!Object.prototype.hasOwnProperty.call(source,key))continue;
-
-          recognized.add(key);
-          const value=source[key];
-
-          if(value!==null&&value!==undefined&&
-             imported[field]===undefined){
-            imported[field]=stringify(value);
-          }
-        }
-      }
-
-      for(const [key,value] of Object.entries(source)){
-        if(!recognized.has(key)){
-          extras.push(key+'：'+stringify(value));
-        }
-      }
-
+    if(trimmed.startsWith('{')||trimmed.startsWith('[')){
+      const parsed=JSON.parse(trimmed);
+      result=buildNaturalCharacterCard(parsed);
     }else{
-      const lookup={};
-
-      for(const [field,keys] of Object.entries(aliases)){
-        for(const key of keys)lookup[key]=field;
-      }
-
-      const unmatched=[];
-
-      for(const line of text.split(/\r?\n/)){
-        const match=line.match(/^\s*([^:：]{1,40})[:：]\s*(.*)$/);
-
-        if(match&&lookup[match[1].trim()]){
-          const field=lookup[match[1].trim()];
-          imported[field]=imported[field]
-            ?imported[field]+'\n'+match[2]
-            :match[2];
-        }else{
-          unmatched.push(line);
-        }
-      }
-
-      if(unmatched.join('\n').trim()){
-        extras.push(unmatched.join('\n'));
-      }
+      result={
+        fields:{},
+        text:trimmed,
+        count:1,
+        sections:1
+      };
     }
 
-    if(extras.length){
-      const extraText=extras.join('\n\n');
-
-      imported.extra=[
-        imported.extra||'',
-        '【未分类的原始角色设定】',
-        extraText
-      ].filter(Boolean).join('\n\n');
+    if(!result.text){
+      throw Error('没有找到人物设定正文');
     }
-
-    if(!Object.keys(imported).length){
-      throw Error('没有找到可导入的角色设定');
-    }
-
-    const fields=Object.keys(imported);
 
     if(!confirm(
-      '识别到 '+fields.length+' 个角色设定栏目。\n\n'+
-      '将更新对应人设字段，其他系统数据不受影响。\n\n'+
-      '是否继续导入？'
-    ))return;
+      '已提取 '+result.count+' 段人物内容。\n'+
+      '整理为 '+result.sections+' 个档案分类。\n\n'+
+      '将替换当前人设卡，不影响聊天、长期记忆、世界书和图库。\n\n'+
+      '建议先导出完整备份。\n\n'+
+      '确认导入吗？'
+    )){
+      return;
+    }
 
     const previous=copy(data.persona);
 
     data.persona={
-      ...data.persona,
-      ...imported
+      ...copy(DEF.persona),
+      name:result.fields.name||previous.name||'沈砚',
+      callme:result.fields.callme||'',
+      personality:result.fields.personality||'',
+      catchphrase:result.fields.catchphrase||'',
+      taboo:result.fields.taboo||'',
+      first:result.fields.first||'',
+      birthday:result.fields.birthday||'',
+      zodiac:result.fields.zodiac||'',
+      hobbies:result.fields.hobbies||'',
+      signature:result.fields.signature||'',
+      extra:result.text
     };
 
     if(!save()){
       data.persona=previous;
-      throw Error('保存失败，原有人设已恢复');
+      throw Error('保存失败，已恢复原有人设');
     }
 
     persona();
     home();
 
     alert(
-      '角色卡导入成功！\n\n'+
-      '已更新 '+fields.length+' 个栏目。\n'+
-      (extras.length
-        ?'未识别的字段已放入补充设定。\n'
-        :'')+
-      '请检查人设卡内容。'
+      '人物档案导入成功！\n\n'+
+      '已整理 '+result.count+' 段内容。\n'+
+      '技术版本字段已过滤。\n'+
+      '人物正文已保存在完整人物档案中。\n\n'+
+      '下一次聊天将读取新设定。'
     );
 
   }catch(err){
@@ -1856,6 +1999,7 @@ $('#personaInput').onchange=async function(e){
     e.target.value='';
   }
 };
+
 
 function renderRoleProfileEditor(target,items){
   const box=target==='my'
