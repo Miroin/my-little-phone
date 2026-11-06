@@ -515,7 +515,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
 'use strict';
 /* 二、文字放 localStorage。读取失败时给出默认值而不让整页崩溃。 */
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
-const DEF={messages:[],memories:[],notes:[],moments:[],calls:[],world:[],summary:'',summaryIndex:0,lastOpen:'',today:'',todayText:'',proactiveState:{lastCheck:0,lastSentAt:0,lastSentDay:'',sentToday:0,period:'',activity:'',mood:'平静'},persona:{name:'',callme:'',personality:'',catchphrase:'',taboo:'',first:'',extra:'',birthday:'',zodiac:'',hobbies:'',signature:''},api:{mode:'local',url:'',model:'',key:'',temperature:.8},settings:{name:'',footer:'有些话，只想说给你听。',theme:'pink',context:12,summarize:true,max:80,proactive:true,proactiveHours:8,quietStart:23,quietEnd:8,notifications:false},myProfile:{name:'我',signature:'',id:'',categories:{}},yanProfile:{name:'沈砚',signature:'',id:'',categories:{}}};
+const DEF={messages:[],memories:[],notes:[],moments:[],calls:[],world:[],summary:'',summaryIndex:0,lastOpen:'',today:'',todayText:'',proactiveState:{lastCheck:0,lastSentAt:0,lastSentDay:'',sentToday:0,period:'',activity:'',mood:'平静'},persona:{name:'',callme:'',personality:'',catchphrase:'',taboo:'',first:'',extra:'',birthday:'',zodiac:'',hobbies:'',signature:''},api:{mode:'local',url:'',model:'',key:'',temperature:.8},settings:{name:'',footer:'有些话，只想说给你听。',theme:'pink',context:12,summarize:true,max:80,proactive:true,proactiveHours:3,quietStart:23,quietEnd:8,notifications:false},myProfile:{name:'我',signature:'',id:'',categories:{}},yanProfile:{name:'沈砚',signature:'',id:'',categories:{}}};
 
 const copy=x=>JSON.parse(JSON.stringify(x));
 let old={};
@@ -531,6 +531,8 @@ let data={
   myProfile:{...DEF.myProfile,...(old.myProfile||{})},
   yanProfile:{...DEF.yanProfile,...(old.yanProfile||{})}
 };
+// 主动陪伴初版曾默认 8 小时；升级为“比较黏人”后将未调整过的旧默认迁移为 3 小时。
+if(old.settings?.proactiveHours===8&&old.settings?.quietStart===23&&old.settings?.quietEnd===8)data.settings.proactiveHours=3;
   // 头像库当前使用关系，兼容旧版固定头像 ID。
 data.avatarSlots = {
   my: old.avatarSlots?.my || 'my-avatar',
@@ -2100,7 +2102,7 @@ function settings(){
   $('#summaryOn').checked=s.summarize;
   $('#memoryMax').value=s.max;
   $('#proactive').checked=s.proactive;
-  $('#proactiveHours').value=s.proactiveHours||8;
+  $('#proactiveHours').value=s.proactiveHours||3;
   $('#quietStart').value=Number.isFinite(+s.quietStart)?s.quietStart:23;
   $('#quietEnd').value=Number.isFinite(+s.quietEnd)?s.quietEnd:8;
   renderProactiveStatus();
@@ -2118,7 +2120,7 @@ $('#settingsForm').onsubmit=e=>{
     summarize:$('#summaryOn').checked,
     max:Math.max(10,Math.min(500,+$('#memoryMax').value||80)),
     proactive:$('#proactive').checked,
-    proactiveHours:Math.max(1,Math.min(48,+$('#proactiveHours').value||8)),
+    proactiveHours:Math.max(1,Math.min(48,+$('#proactiveHours').value||3)),
     quietStart:Math.max(0,Math.min(23,+$('#quietStart').value||0)),
     quietEnd:Math.max(0,Math.min(23,+$('#quietEnd').value||0)),
     notifications:Boolean(data.settings.notifications)
@@ -2497,7 +2499,7 @@ function proactiveAllowed(now=new Date(),force=false){
   const state=data.proactiveState||DEF.proactiveState,today=day();
   if(state.lastSentDay===today&&(state.sentToday||0)>=2)return false;
   const lastMessage=data.messages[data.messages.length-1];if(lastMessage?.role==='assistant'&&lastMessage.proactive)return false;
-  if(state.lastSentAt&&Date.now()-state.lastSentAt<Math.max(1,+data.settings.proactiveHours||8)*3600000)return false;
+  if(state.lastSentAt&&Date.now()-state.lastSentAt<Math.max(1,+data.settings.proactiveHours||3)*3600000)return false;
   const lastUser=[...data.messages].reverse().find(m=>m.role==='user');if(lastUser&&Date.now()-lastUser.at<30*60000)return false;
   return Boolean(data.lastOpen&&(data.lastOpen!==today||state.lastSentAt||lastUser));
 }
