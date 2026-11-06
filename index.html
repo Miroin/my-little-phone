@@ -195,6 +195,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
   border-radius:18px 18px 5px 18px
 }
 .time{font-size:10px;color:var(--muted)}
+.message-tools{display:flex;gap:7px;margin-top:5px}.message-tools button{border:0;background:transparent;color:var(--muted);padding:2px 0;font-size:11px}.thought-panel{margin-top:6px;padding:9px 11px;border-left:3px solid var(--main-light);border-radius:4px 12px 12px 4px;background:var(--soft);color:var(--accent);font-size:12px;line-height:1.6;white-space:pre-wrap}.thought-panel::before{content:'此刻心绪';display:block;font-size:10px;color:var(--muted);margin-bottom:3px}
 #typing{display:none;color:var(--main);padding:5px 18px}
 #typing.on{display:block}
 .composer{
@@ -1447,6 +1448,28 @@ async function deliverAssistantReply(contextText){
 
   await chat();
 }
+const thoughtOpen=new Set(),thoughtBusy=new Set();
+function localThoughtFor(message){
+  const text=String(message?.text||'');
+  if(/想你|喜欢|爱|陪/.test(text))return '想离你近一点，也希望这份在意能被你好好接住。';
+  if(/累|难过|辛苦|休息/.test(text))return '有些心疼，想把语气放轻一点，让你不用独自撑着。';
+  if(/吃|饭|饿/.test(text))return '惦记着你有没有照顾好自己，也想参与这些普通的小事。';
+  if(message?.proactive)return '没有必须要说的大事，只是忽然想靠近你，和你分享这一刻。';
+  return '在认真听你说，也在想怎样回应才不会错过你话里的情绪。';
+}
+async function toggleThought(messageId){
+  if(thoughtOpen.has(messageId)){thoughtOpen.delete(messageId);await chat();return;}
+  thoughtOpen.add(messageId);const message=data.messages.find(item=>item.id===messageId);if(!message||message.thought){await chat();return;}
+  if(thoughtBusy.has(messageId))return;thoughtBusy.add(messageId);await chat();
+  let thought='';
+  if(data.api.mode==='api'&&data.api.url&&data.api.model){
+    try{
+      const previous=data.messages.slice(0,data.messages.indexOf(message)).reverse().find(item=>item.role==='user')?.text||'';
+      thought=await request([{role:'system',content:promptSystem(message.text)+'\n\n请写沈砚在发送下面这条消息时愿意让陈钰看到的“此刻心绪”。这不是分析过程，也不是模型推理；不要解释如何得出回答，不列步骤。只写1至2句自然、克制、符合人物设定的第一人称感受，可以有在意、犹豫、想念或亲近，避免复述原消息。'},{role:'user',content:'陈钰刚才说：'+(previous||'（没有明确上一句）')+'\n沈砚发送：'+message.text+'\n请只输出可公开的此刻心绪。'}]);
+    }catch(error){console.warn('心绪生成失败，使用本地心绪',error);}
+  }
+  thought=String(thought||localThoughtFor(message)).replace(/^(此刻心绪|心绪|内心)[：:\s]*/,'').trim().slice(0,180);message.thought=thought;message.thoughtAt=Date.now();thoughtBusy.delete(messageId);save();await chat();
+}
   async function chat(){
   if(!await refresh())return;
 
@@ -1481,10 +1504,11 @@ async function deliverAssistantReply(contextText){
       bubble.append(document.createTextNode(m.stickerId?'\n'+m.text:m.text));
     }
 
-    body.append(
-      bubble,
-      node('div','time',date(m.at)+(m.fallback?' · 本地回退':''))
-    );
+    body.append(bubble,node('div','time',date(m.at)+(m.fallback?' · 本地回退':'')));
+    if(m.role==='assistant'&&m.text){
+      const tools=node('div','message-tools'),button=node('button','',thoughtOpen.has(m.id)?'收起心绪':'心绪');button.type='button';button.onclick=()=>toggleThought(m.id);tools.append(button);body.append(tools);
+      if(thoughtOpen.has(m.id))body.append(node('div','thought-panel',thoughtBusy.has(m.id)?'正在整理这一刻的感受…':(m.thought||localThoughtFor(m))));
+    }
 
     row.append(
       node('div','avatar',m.role==='user'?'我':avatar()),
