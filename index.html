@@ -1537,8 +1537,8 @@ async function deliverAssistantReply(contextText){
   const assistantMemoryText=[];
 
   async function emit(text,fallback=false){
-    const voiceRequested=Boolean(data.voice?.enabled&&/^\s*\[\[voice\]\]/i.test(String(text||'')));
-    text=String(text||'').replace(/\[\[voice\]\]/ig,'').trim();
+    const parsed=parseVoiceDirective(text),voiceRequested=Boolean(data.voice?.enabled&&parsed.requested);
+    text=parsed.text;
     if(!text)return;
     if(shown>0){
            const delay=Math.min(
@@ -1630,6 +1630,10 @@ async function deliverAssistantReply(contextText){
 }
 let speakingMessageId='',voiceAudio=new Audio(),voiceObjectUrl='';
 const transcriptOpen=new Set();
+function parseVoiceDirective(value=''){
+  const raw=String(value||''),marker=/^\s*(?:\[\[\s*voice\s*\]\]|\[\s*voice\s*\]|【\s*voice\s*】|［\s*voice\s*］)\s*/i;
+  return {requested:marker.test(raw),text:raw.replace(marker,'').replace(/\[\[\s*voice\s*\]\]/ig,'').trim()};
+}
 async function refreshVoiceUi(){await chat({preserveScroll:true});if($('#recallVoicesPanel')&&!$('#recallVoicesPanel').hidden)voiceFavorites();}
 function voiceSeconds(text){return Math.max(2,Math.round(String(text||'').length/4.8))}
 function hexAudioBlob(hex){
@@ -1978,10 +1982,10 @@ let photos=allMedia.filter(m=>m.kind==='photo'),photo='';if(photos.length&&confi
 /* 七、照片上传、网格、预览、删除；媒体永不塞入 localStorage。 */
 $('#addPhotos').onclick=()=>$('#photosInput').click();$('#photosInput').onchange=async e=>{for(let f of e.target.files){if(f.type.startsWith('image/'))await mediaWrite({id:uid(),kind:'photo',name:f.name,at:Date.now(),blob:f})}e.target.value='';photos()};let activePhoto='';async function photos(){if(!await refresh())return;let box=$('#photoList');box.replaceChildren();let list=media.filter(m=>m.kind==='photo');if(!list.length)box.append(node('div','empty','请导入照片'));for(let p of list){let b=node('button'),i=node('img');i.src=objectUrl(p);i.alt=p.name;b.append(i);b.onclick=()=>{activePhoto=p.id;$('#previewImg').src=objectUrl(p);$('#preview').classList.add('open')};box.append(b)}}$('#closePreview').onclick=()=>$('#preview').classList.remove('open');$('#deletePreview').onclick=async()=>{if(confirm('删除选中照片？')){await mediaDelete(activePhoto);$('#preview').classList.remove('open');forgetUrls();photos()}};
 /* 八、通话：文字/麦克风输入、聊天模型回复，并共用 MiniMax 克隆音色。 */
-let callStart=0,callTimer=null,callSession=[],callBusy=false,callMuted=false,callSpeaker=true,callHandsFree=false,callRecognition=null,callListening=false,incomingPending=null,callDirection='outgoing',ringContext=null,ringTimer=null;
+let callStart=0,callTimer=null,callSession=[],callBusy=false,callMuted=false,callSpeaker=true,callHandsFree=false,callRecognition=null,callListening=false,callTurnToken=0,incomingPending=null,callDirection='outgoing',ringContext=null,ringTimer=null;
 const format=n=>{n=Math.max(0,Math.floor(n||0));return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0')};
 function renderCallDialogue(){const box=$('#callDialogue');if(!box)return;box.replaceChildren();if(!callSession.length){box.append(node('div','empty','接通后，沈砚会用同一个音色和你说话。'));return}for(const line of callSession)box.append(node('div','call-line'+(line.role==='user'?' mine':''),(line.role==='user'?'我：':name()+'：')+line.text));box.scrollTop=box.scrollHeight}
-function renderCallControls(){const active=Boolean(callTimer);$('#connect').disabled=active;$('#hangup').disabled=!active;$('#callInput').disabled=!active||callBusy;$('#callSend').disabled=!active||callBusy;$('#callMic').disabled=!active||callBusy||callMuted||callListening;$('#callMute').textContent='静音：'+(callMuted?'开':'关');$('#callMute').classList.toggle('active',callMuted);$('#callSpeaker').textContent='扬声器：'+(callSpeaker?'开':'关');$('#callSpeaker').classList.toggle('active',callSpeaker);$('#callHandsFree').disabled=!active||callBusy;$('#callHandsFree').textContent='免提对话：'+(callHandsFree?'开':'关');$('#callHandsFree').classList.toggle('active',callHandsFree)}
+function renderCallControls(){const active=Boolean(callTimer);$('#connect').disabled=active;$('#hangup').disabled=!active;$('#callInput').disabled=!active||callBusy;$('#callSend').disabled=!active||callBusy;$('#callMic').disabled=!active||callMuted||callListening;$('#callMute').textContent='静音：'+(callMuted?'开':'关');$('#callMute').classList.toggle('active',callMuted);$('#callSpeaker').textContent='扬声器：'+(callSpeaker?'开':'关');$('#callSpeaker').classList.toggle('active',callSpeaker);$('#callHandsFree').disabled=!active;$('#callHandsFree').textContent='自动接话：'+(callHandsFree?'开':'关');$('#callHandsFree').classList.toggle('active',callHandsFree)}
 function callStatusText(c){return c.status==='declined'?'已拒接':c.status==='missed'?'未接来电':(c.direction==='incoming'?'已接来电':'已拨电话')}
 function callTranscriptText(session=[]){return session.map(x=>(x.role==='user'?'陈钰：':name()+'：')+x.text).join('\n')}
 function openCallSummary(record,ended=false){if(!record)return;$('#callSummaryTitle').textContent=ended?'通话结束':'通话记录';$('#callSummaryMeta').textContent=date(record.at)+' · '+callStatusText(record)+(record.seconds?' · '+format(record.seconds):'')+(record.turns?' · '+record.turns+' 轮':'');$('#callSummaryTranscript').textContent=record.transcript||'这通电话没有留下文字对话。';$('#callSummary').classList.add('open')}
@@ -1999,21 +2003,22 @@ function startCallListening(manual=false){
   try{recognition.start();return true}catch(e){callListening=false;callRecognition=null;if(manual)alert('无法打开麦克风：'+e.message);renderCallControls();return false}
 }
 async function callRespond(context){
-  if(!callTimer||callBusy)return;callBusy=true;renderCallControls();$('#callStatus').textContent='沈砚正在说话…';
+  if(!callTimer||callBusy)return;const turnToken=++callTurnToken;callBusy=true;stopCallListening();renderCallControls();$('#callStatus').textContent='沈砚正在说话…';
   try{
     let answer;if(data.api.mode==='api'){const recentChat=lastMsgs().filter(x=>x.text).slice(-8).map(x=>({role:x.role,content:String(x.text).slice(-800)})),history=callSession.slice(-12).map(x=>({role:x.role,content:x.text}));if(!history.length)history.push({role:'user',content:context});answer=await request(attachRelationshipRule([{role:'system',content:promptSystem(context)+'\n\n现在是与陈钰的实时语音通话。你知道这通电话来自同一个聊天关系，必须自然承接前面的文字聊天和相关长期记忆，也要记住本次通话已经说过的内容。只回复一段适合直接说出来的口语，自然、亲近、简短、有情绪，不要输出 [[voice]]、舞台说明或书面总结。'},...recentChat,...history]))}else answer=localAnswer(context);
+    if(turnToken!==callTurnToken||!callTimer)return;
     answer=String(answer||'').replace(/\[\[voice\]\]/ig,'').replace(/\n+/g,' ').trim();if(!answer)answer='嗯，我在听。';callSession.push({role:'assistant',text:answer,at:Date.now()});renderCallDialogue();
     try{await playCallVoice(answer)}catch(e){console.warn('通话语音生成失败',e);$('#callStatus').textContent='语音失败：'+e.message}
-  }catch(e){callSession.push({role:'assistant',text:localAnswer(context),at:Date.now()});renderCallDialogue();$('#callStatus').textContent='回复失败：'+e.message}
-  finally{callBusy=false;if(callTimer)$('#callStatus').textContent='通话中';renderCallControls();if(callHandsFree&&callTimer&&!callMuted)setTimeout(()=>startCallListening(false),500)}
+  }catch(e){if(turnToken===callTurnToken&&callTimer){callSession.push({role:'assistant',text:localAnswer(context),at:Date.now()});renderCallDialogue();$('#callStatus').textContent='回复失败：'+e.message}}
+  finally{if(turnToken!==callTurnToken)return;callBusy=false;if(callTimer)$('#callStatus').textContent=callHandsFree?'现在可以直接说话':'通话中';renderCallControls();if(callHandsFree&&callTimer&&!callMuted)setTimeout(()=>startCallListening(false),250)}
 }
 async function sendCallInput(){const input=$('#callInput'),text=input.value.trim();if(!text||!callTimer||callBusy)return;input.value='';callSession.push({role:'user',text,at:Date.now()});renderCallDialogue();await callRespond(text)}
-async function startVoiceCall(incoming=false){if(callTimer)return false;if(!data.voice?.enabled||!data.voice?.key){alert('请先在“接口与模型”开启 MiniMax 语音并填写密钥。');return false}callDirection=incoming?'incoming':'outgoing';callStart=Date.now();callSession=[];callHandsFree=false;stopCallListening();$('#callStatus').textContent=incoming?'已接听':'正在接通…';$('#callClock').textContent='00:00';callTimer=setInterval(()=>$('#callClock').textContent=format((Date.now()-callStart)/1000),300);renderCallControls();await callRespond(incoming?'你刚主动给陈钰打来电话，她已经接听。自然说明为什么想打给她并开始聊天。':'电话刚接通，主动自然地和用户打招呼。');return true}
+async function startVoiceCall(incoming=false){if(callTimer)return false;if(!data.voice?.enabled||!data.voice?.key){alert('请先在“接口与模型”开启 MiniMax 语音并填写密钥。');return false}callDirection=incoming?'incoming':'outgoing';callStart=Date.now();callSession=[];callHandsFree=Boolean(window.SpeechRecognition||window.webkitSpeechRecognition);stopCallListening();$('#callStatus').textContent=incoming?'已接听':'正在接通…';$('#callClock').textContent='00:00';callTimer=setInterval(()=>$('#callClock').textContent=format((Date.now()-callStart)/1000),300);renderCallControls();await callRespond(incoming?'你刚主动给陈钰打来电话，她已经接听。自然说明为什么想打给她并开始聊天。':'电话刚接通，主动自然地和用户打招呼。');return true}
 $('#connect').onclick=()=>startVoiceCall(false);
 $('#hangup').onclick=async()=>{if(!callTimer)return;clearInterval(callTimer);callTimer=null;callHandsFree=false;stopCallListening();await stopVoice(false);const n=Math.floor((Date.now()-callStart)/1000),record={id:uid(),at:callStart,seconds:n,turns:callSession.filter(x=>x.role==='user').length,direction:callDirection,status:'answered',transcript:callTranscriptText(callSession),session:copy(callSession)};data.calls.unshift(record);const chatMemory='刚刚进行了一次'+(callDirection==='incoming'?name()+'主动打来的':'打给'+name()+'的')+'语音通话，持续 '+format(n)+'。\n'+record.transcript;data.messages.push({id:uid(),role:'assistant',kind:'call',callId:record.id,text:chatMemory,at:Date.now()});condense();save();$('#callClock').textContent=format(n);$('#callStatus').textContent='通话结束 · '+format(n);renderCallControls();calls();await chat();openCallSummary(record,true)};
 $('#callSend').onclick=sendCallInput;$('#callInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();sendCallInput()}};$('#callMute').onclick=()=>{callMuted=!callMuted;if(callMuted)stopCallListening();else if(callHandsFree)setTimeout(()=>startCallListening(false),300);renderCallControls()};$('#callSpeaker').onclick=()=>{callSpeaker=!callSpeaker;if(!callSpeaker)voiceAudio.pause();renderCallControls()};
 $('#callHandsFree').onclick=()=>{callHandsFree=!callHandsFree;if(callHandsFree){if(!startCallListening(true))callHandsFree=false}else stopCallListening();renderCallControls()};
-$('#callMic').onclick=()=>startCallListening(true);
+$('#callMic').onclick=async()=>{if(callBusy){callTurnToken++;callBusy=false;await stopVoice(false);$('#callStatus').textContent='已打断，现在听你说';renderCallControls()}startCallListening(true)};
 $('#chatCall').onclick=()=>show('calls');
 function unlockRingtone(){if(ringContext)return;const AudioContext=window.AudioContext||window.webkitAudioContext;if(!AudioContext)return;try{ringContext=new AudioContext();ringContext.resume()}catch(e){ringContext=null}}
 document.addEventListener('pointerdown',unlockRingtone,{once:true});
@@ -3023,10 +3028,11 @@ async function proactiveMessage(force=false){
   }
   let parts=splitAssistantMessages(text).filter(Boolean).slice(0,2);if(!parts.length)parts=[proactiveLocalText(life,kind)];
   const recent=Array.isArray(state.lastTexts)?state.lastTexts:[];if(parts.some(part=>recent.some(old=>memorySimilarity(part,old)>.78)))parts=[proactiveLocalText(life,kind)];
-  parts.forEach((part,index)=>data.messages.push({id:uid(),role:'assistant',text:part,at:Date.now()+index,proactive:true}));
-  state.lastKind=kind;state.lastTexts=[...recent,...parts].slice(-6);
-  if(!force){state.lastSentAt=Date.now();state.nextOpportunityAt=nextCompanionOpportunity(life);}data.lastOpen=today;parts.forEach(part=>detectMemory(part,'assistant'));save();renderProactiveStatus();
-  if(data.settings.notifications&&typeof Notification!=='undefined'&&Notification.permission==='granted'&&document.hidden){try{new Notification(name(),{body:parts.join(' ')})}catch(error){console.warn('通知发送失败',error)}}
+  const created=[];parts.forEach((part,index)=>{const parsed=parseVoiceDirective(part),voiceRequested=Boolean(data.voice?.enabled&&parsed.requested),message={id:uid(),role:'assistant',text:parsed.text,at:Date.now()+index,proactive:true,voiceRequested,voiceStatus:voiceRequested?'queued':''};data.messages.push(message);created.push(message)});
+  state.lastKind=kind;state.lastTexts=[...recent,...created.map(message=>message.text)].slice(-6);
+  if(!force){state.lastSentAt=Date.now();state.nextOpportunityAt=nextCompanionOpportunity(life);}data.lastOpen=today;created.forEach(message=>detectMemory(message.text,'assistant'));save();renderProactiveStatus();
+  for(const message of created)if(message.voiceRequested)generateVoiceForMessage(message).catch(error=>console.warn('主动语音生成失败',error));
+  if(data.settings.notifications&&typeof Notification!=='undefined'&&Notification.permission==='granted'&&document.hidden){try{new Notification(name(),{body:created.map(message=>message.text).join(' ')})}catch(error){console.warn('通知发送失败',error)}}
   return true;
 }
 $('#testProactive').onclick=async()=>{if(busy){alert('正在回复消息，请稍后再试。');return}$('#testProactive').disabled=true;try{const sent=await proactiveMessage(true);alert(sent?'测试主动消息已放进聊天。':'未生成消息。');}finally{$('#testProactive').disabled=false;}};

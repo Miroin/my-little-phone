@@ -52,4 +52,13 @@ assert.match(html,/feedbackIssues/,'负面反馈必须归纳为问题类型');
 assert.match(html,/x\.feedbackApproved\?\.08:x\.curated\?\.12:\.18/,'历史、认可和整理版样本必须使用不同相关度门槛');
 assert.match(html,/sourceType=historical_exact 才是历史原话/,'提示词必须区分历史原话与重写参考');
 
+const voiceParserSource=sourceBetween('function parseVoiceDirective','async function refreshVoiceUi');
+const parseVoiceDirective=Function(`${voiceParserSource}; return parseVoiceDirective;`)();
+for(const marker of ['[[voice]]你好','[voice]你好','【voice】你好','［VOICE］ 你好']){
+  const parsed=parseVoiceDirective(marker);assert.equal(parsed.requested,true,`未识别语音标记：${marker}`);assert.equal(parsed.text,'你好','语音标记不应显示在正文');
+}
+assert.match(html,/for\(const message of created\)if\(message\.voiceRequested\)generateVoiceForMessage/,'主动语音必须实际生成音频');
+assert.match(html,/callHandsFree=Boolean\(window\.SpeechRecognition\|\|window\.webkitSpeechRecognition\)/,'接通后应默认进入自动接话模式');
+assert.match(html,/已打断，现在听你说/,'通话中点击麦克风必须可以打断回复');
+
 console.log(`通过：${cases.length} 个固定场景、按轮上下文、记忆污染、规则注入、返回层级和滚动位置检查`);
