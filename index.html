@@ -1533,12 +1533,13 @@ async function toggleVoiceFavorite(message){
 const thoughtOpen=new Set(),thoughtBusy=new Set();
 function localThoughtFor(message){
   const text=String(message?.text||'');
-  if(/想你|喜欢|爱|陪/.test(text))return '想离你近一点，也希望这份在意能被你好好接住。';
-  if(/累|难过|辛苦|休息/.test(text))return '有些心疼，想把语气放轻一点，让你不用独自撑着。';
-  if(/吃|饭|饿/.test(text))return '惦记着你有没有照顾好自己，也想参与这些普通的小事。';
-  if(message?.proactive)return '没有必须要说的大事，只是忽然想靠近你，和你分享这一刻。';
-  return '在认真听你说，也在想怎样回应才不会错过你话里的情绪。';
+  if(/想你|喜欢|爱|陪/.test(text))return '好吧，确实有点想黏着她。再多待一会儿。';
+  if(/累|难过|辛苦|休息/.test(text))return '她都这么累了，先别讲那些没用的，陪着就好。';
+  if(/吃|饭|饿/.test(text))return '也不知道她到底有没有好好吃饭，等会儿再问一句。';
+  if(message?.proactive)return '其实没什么事，就是想她了，找个借口来聊两句。';
+  return '这句得好好接，别又让她觉得我在跟她犟。';
 }
+async function regenerateThought(messageId){const message=data.messages.find(item=>item.id===messageId);if(!message)return;delete message.thought;thoughtOpen.delete(messageId);save();await toggleThought(messageId)}
 async function toggleThought(messageId){
   if(thoughtOpen.has(messageId)){thoughtOpen.delete(messageId);await chat();return;}
   thoughtOpen.add(messageId);const message=data.messages.find(item=>item.id===messageId);if(!message||message.thought){await chat();return;}
@@ -1547,10 +1548,10 @@ async function toggleThought(messageId){
   if(data.api.mode==='api'&&data.api.url&&data.api.model){
     try{
       const previous=data.messages.slice(0,data.messages.indexOf(message)).reverse().find(item=>item.role==='user')?.text||'';
-      thought=await request([{role:'system',content:promptSystem(message.text)+'\n\n请写沈砚在发送下面这条消息时愿意让陈钰看到的“此刻心绪”。这不是分析过程，也不是模型推理；不要解释如何得出回答，不列步骤。只写1至2句自然、克制、符合人物设定的第一人称感受，可以有在意、犹豫、想念或亲近，避免复述原消息。'},{role:'user',content:'陈钰刚才说：'+(previous||'（没有明确上一句）')+'\n沈砚发送：'+message.text+'\n请只输出可公开的此刻心绪。'}]);
+      thought=await request([{role:'system',content:promptSystem(message.text)+'\n\n写一句沈砚刚发完消息后，脑子里一闪而过、没直接说出口的小念头。像真人心里随口想的话，不是分析、总结、旁白、情绪报告或文艺独白。必须具体、口语、带一点沈砚自己的脾气和亲近感，8至45个汉字，可以有停顿、不好意思、嘴硬后的改口或很普通的生活念头。不要复述已发送的话，不要解释原因，不要写“他/沈砚”。禁止使用：心里一软、泛起、涟漪、轻轻、悄悄、被触动、被治愈、情绪、感受到、这份、此刻、忍不住嘴角上扬、想把她拥入怀中。只输出念头本身。'},{role:'user',content:'她刚才说：'+(previous||'（没说具体内容）')+'\n我刚回她：'+message.text+'\n写我现在脑子里那一句没说出口的话。'}]);
     }catch(error){console.warn('心绪生成失败，使用本地心绪',error);}
   }
-  thought=String(thought||localThoughtFor(message)).replace(/^(此刻心绪|心绪|内心)[：:\s]*/,'').trim().slice(0,180);message.thought=thought;message.thoughtAt=Date.now();thoughtBusy.delete(messageId);save();await chat();
+  thought=String(thought||localThoughtFor(message)).replace(/^(此刻心绪|心绪|内心)[：:\s]*/,'').trim();if(/我应该|可以先|用户|对方需要|根据.{0,4}(设定|人设)|心里一软|泛起|涟漪|被.{0,3}(触动|治愈)|这份|此刻/.test(thought))thought=localThoughtFor(message);thought=thought.slice(0,80);message.thought=thought;message.thoughtAt=Date.now();thoughtBusy.delete(messageId);save();await chat();
 }
   async function chat(){
   if(!await refresh())return;
@@ -1601,6 +1602,7 @@ async function toggleThought(messageId){
     body.append(bubble,node('div','time',date(m.at)+(m.fallback?' · 本地回退':'')));
     if(m.role==='assistant'&&m.text&&!m.kind){
       const tools=node('div','message-tools'),button=node('button','',thoughtOpen.has(m.id)?'收起心绪':'心绪');button.type='button';button.onclick=()=>toggleThought(m.id);tools.append(button);
+      if(thoughtOpen.has(m.id)&&m.thought){const rewrite=node('button','','重写心绪');rewrite.type='button';rewrite.onclick=()=>regenerateThought(m.id);tools.append(rewrite)}
       if(m.voiceRequested){
         const transcriptButton=node('button','',transcriptOpen.has(m.id)?'收起文字':'转文字');transcriptButton.type='button';transcriptButton.onclick=()=>{transcriptOpen.has(m.id)?transcriptOpen.delete(m.id):transcriptOpen.add(m.id);chat()};tools.append(transcriptButton);
         if(m.voiceClipId){const favoriteButton=node('button','',voiceFavorite(m)?'★ 已收藏':'☆ 收藏');favoriteButton.type='button';favoriteButton.onclick=()=>toggleVoiceFavorite(m);tools.append(favoriteButton)}
