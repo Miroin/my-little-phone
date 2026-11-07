@@ -280,6 +280,14 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
 .switch{display:flex;align-items:center;justify-content:space-between}
 .center{text-align:center}
 .character-content{white-space:pre-wrap;overflow-wrap:anywhere}
+.role-quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.role-profile-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.role-profile-editor{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.role-profile-editor>.card{margin:0;padding:12px;min-width:0}
+.role-profile-editor>.card h3{font-size:14px;margin-bottom:6px}
+.role-profile-editor>.card .character-content{font-size:13px;line-height:1.45;max-height:64px;overflow:auto;margin:5px 0 9px}
+.role-profile-editor>.card .btn{padding:7px 11px;font-size:12px}
+@media(max-width:420px){.role-profile-editor{grid-template-columns:1fr 1fr}.role-quick-actions{grid-template-columns:1fr 1fr}}
 </style></head><body><div class="phone">
 <section class="screen active" id="lock" tabindex="0"><div id="lockTime">00:00</div><div id="lockDate"></div><div id="lockQuote"></div><div class="muted">轻点屏幕解锁 ♡</div></section>
 <section class="screen" id="home"><div class="welcome"><h2 id="homeTitle"></h2><div id="daily"></div></div><div id="icons" class="grid icons"></div><div id="footer"></div></section>
@@ -373,26 +381,31 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
 
   <main class="body">
     <div class="card">
-      <h3>我的资料维护</h3>
-      <p class="muted">沈砚在日常相处中逐渐记录你的习惯、喜好和重要信息，也可以在这里修正记录。</p>
-      <div id="roleMyProfileEditor"></div>
-      <div id="roleMyAvatarManager"></div>
+      <h3>设定与导入</h3>
+      <p class="muted">常用入口集中在这里，导入后不用再向下翻找。</p>
+      <div class="role-quick-actions">
+        <button class="btn" id="rolePersonaImport" type="button">导入人设</button>
+        <button class="btn alt" data-go="historyMigration" type="button">导入历史记忆</button>
+        <button class="btn alt" id="roleWorldImport" type="button">导入世界书</button>
+        <button class="btn alt" data-go="memory" type="button">查看长期记忆</button>
+        <button class="btn alt" data-go="persona" type="button">查看完整人设</button>
+        <button class="btn alt" data-go="world" type="button">管理世界书</button>
+      </div>
     </div>
 
     <div class="card">
-      <h3>沈砚的资料维护</h3>
-      <p class="muted">维护沈砚自己的性格、行为习惯、喜好和个人信息。</p>
-      <div id="roleYanProfileEditor"></div>
-      <div id="roleYanAvatarManager"></div>
-    </div>
-
-    <div class="card">
-      <h3>其他角色设定</h3>
-      <p class="muted">管理角色固定人设、长期记忆和共同生活的世界设定。</p>
-      <div class="actions">
-        <button class="btn" data-go="persona">人设卡</button>
-        <button class="btn alt" data-go="memory">长期记忆</button>
-        <button class="btn alt" data-go="world">世界书</button>
+      <div class="role-profile-tabs">
+        <button class="btn" id="roleMyTab" type="button">我的资料</button>
+        <button class="btn alt" id="roleYanTab" type="button">沈砚的资料</button>
+      </div>
+      <p class="muted" id="roleProfileHint">可以查看和修正沈砚记住的你的资料。</p>
+      <div id="roleMyProfilePanel">
+        <div class="role-profile-editor" id="roleMyProfileEditor"></div>
+        <div id="roleMyAvatarManager"></div>
+      </div>
+      <div id="roleYanProfilePanel" hidden>
+        <div class="role-profile-editor" id="roleYanProfileEditor"></div>
+        <div id="roleYanAvatarManager"></div>
       </div>
     </div>
   </main>
@@ -401,7 +414,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
   <header class="head">
     <button class="back" data-home>‹</button>
     <b>个人资料</b>
-    <button class="btn alt small" data-go="role">角色管理</button>
+    <button class="btn alt small" id="openRoleManager" type="button" onclick="show('role')">角色管理</button>
   </header>
 
   <main class="body">
@@ -2136,6 +2149,8 @@ $('#personaForm').onsubmit=e=>{
   catch(error){alert(error.message);}
 };
 $('#personaImport').onclick=()=>$('#personaInput').click();
+$('#rolePersonaImport').onclick=()=>$('#personaInput').click();
+$('#roleWorldImport').onclick=()=>$('#worldInput').click();
 $('#personaInput').onchange=async e=>{
   const file=e.target.files?.[0];if(!file)return;
   try{
@@ -2193,6 +2208,8 @@ function renderRoleProfileEditor(target,items){
   });
 }
 
+let roleProfileTarget='my';
+$('#openRoleManager').onclick=()=>show('role');
 function role(){
 
   const myCategories=[
@@ -2207,6 +2224,20 @@ function role(){
 
   renderAvatarManager('my');
   renderAvatarManager('yan');
+
+  const switchRoleProfile=target=>{
+    roleProfileTarget=target;
+    $('#roleMyProfilePanel').hidden=target!=='my';
+    $('#roleYanProfilePanel').hidden=target!=='yan';
+    $('#roleMyTab').classList.toggle('alt',target!=='my');
+    $('#roleYanTab').classList.toggle('alt',target!=='yan');
+    $('#roleProfileHint').textContent=target==='my'
+      ?'可以查看和修正沈砚记住的你的资料。'
+      :'可以查看和修正沈砚的性格、习惯、喜好和个人信息。';
+  };
+  $('#roleMyTab').onclick=()=>switchRoleProfile('my');
+  $('#roleYanTab').onclick=()=>switchRoleProfile('yan');
+  switchRoleProfile(roleProfileTarget);
 }
 
 /* 十二、世界书四字段：标题、关键词、设定正文和常驻开关。 */
