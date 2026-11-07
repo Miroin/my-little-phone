@@ -1537,27 +1537,18 @@ async function toggleVoiceFavorite(message){
   const existing=voiceFavorite(message);if(existing)data.voiceFavorites=data.voiceFavorites.filter(item=>item.id!==existing.id);else if(message.voiceClipId)data.voiceFavorites.unshift({id:uid(),messageId:message.id,voiceClipId:message.voiceClipId,voiceSeconds:message.voiceSeconds,text:message.text,at:Date.now(),messageAt:message.at});save();await chat();
 }
 const thoughtOpen=new Set(),thoughtBusy=new Set();
-function localThoughtFor(message){
-  const text=String(message?.text||'');
-  if(/想你|喜欢|爱|陪/.test(text))return '好吧，确实有点想黏着她。再多待一会儿。';
-  if(/累|难过|辛苦|休息/.test(text))return '她都这么累了，先别讲那些没用的，陪着就好。';
-  if(/吃|饭|饿/.test(text))return '也不知道她到底有没有好好吃饭，等会儿再问一句。';
-  if(message?.proactive)return '其实没什么事，就是想她了，找个借口来聊两句。';
-  return '她肯跟我说这些就好。再陪她聊一会儿，别急着收尾。';
-}
-async function regenerateThought(messageId){const message=data.messages.find(item=>item.id===messageId);if(!message)return;delete message.thought;thoughtOpen.delete(messageId);save();await toggleThought(messageId)}
 async function toggleThought(messageId){
   if(thoughtOpen.has(messageId)){thoughtOpen.delete(messageId);await chat();return;}
-  thoughtOpen.add(messageId);const message=data.messages.find(item=>item.id===messageId);if(!message||message.thought){await chat();return;}
+  thoughtOpen.add(messageId);const message=data.messages.find(item=>item.id===messageId);if(!message||message.thought||message.thoughtUnavailable){await chat();return;}
   if(thoughtBusy.has(messageId))return;thoughtBusy.add(messageId);await chat();
   let thought='';
   if(data.api.mode==='api'&&data.api.url&&data.api.model){
     try{
       const previous=data.messages.slice(0,data.messages.indexOf(message)).reverse().find(item=>item.role==='user')?.text||'';
-      thought=await request([{role:'system',content:promptSystem(message.text)+'\n\n写一句沈砚刚发完消息后，脑子里一闪而过、没直接说出口的小念头。像真人心里随口想的话，不是分析、总结、旁白、情绪报告或文艺独白。必须具体、口语、带一点沈砚自己的亲近感，8至45个汉字，可以有停顿、不好意思、宠她时很普通的生活念头。不要复述已发送的话，不要解释原因，不要写“他/沈砚”。禁止使用：心里一软、泛起、涟漪、轻轻、悄悄、被触动、被治愈、情绪、感受到、这份、此刻、忍不住嘴角上扬、想把她拥入怀中。只输出念头本身。'},{role:'user',content:'她刚才说：'+(previous||'（没说具体内容）')+'\n我刚回她：'+message.text+'\n写我现在脑子里那一句没说出口的话。'}]);
-    }catch(error){console.warn('心绪生成失败，使用本地心绪',error);}
+      thought=await request([{role:'system',content:promptSystem(message.text)+'\n\n现在写的是沈砚在开口前后真实流过脑海、没有说出口的内心。主语就是“我”，直接待在念头里，不站到外面分析自己，也不计算怎样扮演或怎样让陈钰满意。抓住她刚才话里一个真正让你在意的细节，让念头自然地往下走；允许停顿、改口、矛盾、走神、很生活的小事和没得出结论。它不必好听、不必完整、不必总结情绪，也不是给人看的文案。不要列点、不要标题、不要解释任务、不要复述已经发出的回复。写一段自然中文，只输出内心本身。'},{role:'user',content:'她刚才说：'+(previous||'（没说具体内容）')+'\n我后来回她：'+message.text+'\n把那一刻实际从我脑子里经过、但没有说出口的内容原样留下。'}]);
+    }catch(error){console.warn('心绪生成失败，本次不使用替代文案',error);}
   }
-  thought=String(thought||localThoughtFor(message)).replace(/^(此刻心绪|心绪|内心)[：:\s]*/,'').trim();if(/我应该|可以先|用户|对方需要|根据.{0,4}(设定|人设)|心里一软|泛起|涟漪|被.{0,3}(触动|治愈)|这份|此刻/.test(thought))thought=localThoughtFor(message);thought=thought.slice(0,80);message.thought=thought;message.thoughtAt=Date.now();thoughtBusy.delete(messageId);save();await chat();
+  thought=String(thought||'').replace(/^(此刻心绪|心绪|内心)[：:\s]*/,'').trim();if(/我应该|可以先|用户|对方需要|根据.{0,4}(设定|人设)/.test(thought))thought='';if(thought){message.thought=thought.slice(0,1200);message.thoughtAt=Date.now()}else message.thoughtUnavailable=true;thoughtBusy.delete(messageId);save();await chat();
 }
   async function chat(){
   if(!await refresh())return;
@@ -1608,14 +1599,13 @@ async function toggleThought(messageId){
     body.append(bubble,node('div','time',date(m.at)+(m.fallback?' · 本地回退':'')));
     if(m.role==='assistant'&&m.text&&!m.kind){
       const tools=node('div','message-tools'),button=node('button','',thoughtOpen.has(m.id)?'收起心绪':'心绪');button.type='button';button.onclick=()=>toggleThought(m.id);tools.append(button);
-      if(thoughtOpen.has(m.id)&&m.thought){const rewrite=node('button','','重写心绪');rewrite.type='button';rewrite.onclick=()=>regenerateThought(m.id);tools.append(rewrite)}
       if(m.voiceRequested){
         const transcriptButton=node('button','',transcriptOpen.has(m.id)?'收起文字':'转文字');transcriptButton.type='button';transcriptButton.onclick=()=>{transcriptOpen.has(m.id)?transcriptOpen.delete(m.id):transcriptOpen.add(m.id);chat()};tools.append(transcriptButton);
         if(m.voiceClipId){const favoriteButton=node('button','',voiceFavorite(m)?'★ 已收藏':'☆ 收藏');favoriteButton.type='button';favoriteButton.onclick=()=>toggleVoiceFavorite(m);tools.append(favoriteButton)}
       }
       body.append(tools);
       if(m.voiceRequested&&transcriptOpen.has(m.id))body.append(node('div','voice-transcript',m.text));
-      if(thoughtOpen.has(m.id))body.append(node('div','thought-panel',thoughtBusy.has(m.id)?'正在整理这一刻的感受…':(m.thought||localThoughtFor(m))));
+      if(thoughtOpen.has(m.id))body.append(node('div','thought-panel',thoughtBusy.has(m.id)?'正在记录这一刻…':(m.thought||(m.thoughtUnavailable?'这一次没有留下心绪。':'尚未记录'))));
     }
 
     row.append(
