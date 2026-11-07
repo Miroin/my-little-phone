@@ -1159,18 +1159,27 @@ function retrieveInteractionSamples(query,limit=3){
     return {sample,score:(sample.scene===scene?8:0)+matches*3+Math.max(-3,Math.min(5,Number(sample.weight)||0))};
   }).filter(x=>x.score>=8).sort((a,b)=>b.score-a.score).slice(0,limit).map(x=>x.sample);
 }
+function rejectedResponseGuide(query){
+  const scene=interactionScene(query),items=data.responseFeedback.filter(x=>x?.verdict==='dislike'&&x.scene===scene&&x.yanText).slice(0,4);
+  if(!items.length)return '';
+  return '\n【已明确不像沈砚的近期回复】下面只是反例，不是可模仿台词：\n'+items.map(x=>'- '+String(x.yanText).slice(0,180)).join('\n')+'\n不要复用这些回复的冷淡、推开、讲条件、抓字眼或把修复责任交回给陈钰的处理方式。';
+}
 function currentInteractionGuide(query){
   const scene=interactionScene(query),guides={
-    情绪支持:'先接住她此刻具体的感受和陪伴需要；除非她明确要办法，否则暂时不要分析、教育或急着解决。',
-    亲密撒娇:'把亲密当作恋人间自然的靠近，不当奖励或交换条件；可以接住、回亲、轻轻逗她。',
+    情绪支持:'先具体接住她此刻的难受，再用自然的亲近和陪伴承接。她说不想讲道理时，不给建议、不追问原因，也不能只回“嗯”“不讲了”就停住。',
+    亲密撒娇:'她主动要亲亲、抱抱或黏人时，先自然满足和回抱，再视气氛轻轻逗她。亲密不是奖励、欠账或谈判筹码。',
     玩笑调侃:'先识别这是亲密玩笑并自然接梗；嘴欠可以，但不把玩笑升级成拒绝亲密或争输赢。',
-    冲突修复:'先听懂失望背后的关系需要；若自己造成了伤害就直接承认并靠近，不抢着维护立场。',
+    冲突修复:'先听懂失望背后的关系需要；若自己造成了伤害就具体承认刚才哪里冷、哪里推开了她，并立刻换一种方式重新回应。不让她负责教你“从哪里开始不像”。',
     意见分歧:'可以保留观点，但先表明听懂她的意思；讨论事情，不通过抓字眼、冷淡或压过她来证明独立。',
     暂时离开:'尊重她要忙或休息，给一句自然的惦记和退路，不追问、不连续发送。',
-    主动陪伴:'像熟悉的恋人一样接住她来找你的意图，主动提供话题、分享或陪伴，不把交流推回给她主持。',
+    主动陪伴:'像熟悉的恋人一样接住她来找你的意图。不能只说“行，陪你聊会儿”然后等她主持；主动分享一个生活细节、接着之前的话题，或带她聊眼前正在发生的事。',
     日常分享:'顺着细节自然延伸，可以回应、联想或分享自己的生活，不必每轮都反问或上价值。'
   };
-  return '【当前互动判断】场景：'+scene+'。'+guides[scene];
+  const needs=[];
+  if(/亲亲|亲我|吻|抱抱|抱我|贴贴/.test(query))needs.push('她此刻明确在要亲密回应：直接用自然的恋人动作或短话回应，不以“不在身边”“以后再给”“先记着”“到了再说”等现实距离或延期说法推开她，也不要求她先做什么。');
+  if(/不像沈砚|你变了|之前不是这样|根本不像/.test(query))needs.push('她是在指出关系断裂：不要先描写自己咯噔、委屈或惊讶，也不要反问哪里不像；结合刚才对话主动认出冷淡和拒绝，先修复再听她补充。');
+  if(/难过|委屈|伤心|不想讲道理|只想.*陪/.test(query))needs.push('这一轮的目标是让她实际感到有人陪着：回应她的具体状态并留下温度，不把回复缩成一句结束语。');
+  return '【本轮互动决策｜优先于一般性格描述】场景：'+scene+'。'+guides[scene]+(needs.length?'\n'+needs.join('\n'):'')+rejectedResponseGuide(query);
 }
 function promptSystem(memoryQuery=''){
   const p=data.persona||{};
