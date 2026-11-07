@@ -100,6 +100,15 @@ button,input,textarea,select{max-width:100%}
 [data-theme="y2k"] .appicon i{border-radius:50%;color:white}
 [data-theme="y2k"] #lock,[data-theme="y2k"] #home{background:transparent}
 #beauty [data-theme][aria-pressed="true"]{outline:2px solid color-mix(in srgb,var(--main) 70%,white);outline-offset:2px;box-shadow:0 0 0 4px color-mix(in srgb,var(--main) 16%,transparent)}
+[data-pack-style="luxury"] body{font-family:"Songti SC","STSong","Noto Serif SC",serif;background:#8c8583}
+[data-pack-style="luxury"] .phone{background-image:var(--theme-wallpaper);background-size:cover;background-position:center}
+[data-pack-style="luxury"] .phone::before{opacity:.16;background:linear-gradient(rgba(255,255,255,.16),rgba(86,75,76,.08));backdrop-filter:saturate(.86)}
+[data-pack-style="luxury"] .head,[data-pack-style="luxury"] .composer,[data-pack-style="luxury"] #stickerPanel{background:rgba(126,116,116,.44);border-color:rgba(255,238,209,.54);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+[data-pack-style="luxury"] .card,[data-pack-style="luxury"] .bubble,[data-pack-style="luxury"] .appicon i{background:linear-gradient(145deg,rgba(255,251,243,.27),rgba(120,106,108,.19));border:1px solid rgba(255,238,209,.52);box-shadow:inset 0 1px 1px rgba(255,255,255,.28),0 8px 28px rgba(68,55,57,.16),0 0 12px rgba(255,229,190,.14);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+[data-pack-style="luxury"] .mine .bubble{background:linear-gradient(145deg,rgba(205,183,171,.54),rgba(142,124,128,.42))}
+[data-pack-style="luxury"] h2,[data-pack-style="luxury"] h3,[data-pack-style="luxury"] .head b{font-weight:500;letter-spacing:.12em;text-shadow:0 1px 8px rgba(255,245,222,.22)}
+[data-pack-style="luxury"] .appicon i{border-radius:26px;color:#fff1d5}
+.theme-library{display:grid;gap:10px;margin-top:12px}.theme-library .theme-item{display:grid;grid-template-columns:46px 1fr auto;gap:10px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:16px;background:var(--soft)}.theme-swatch{width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,var(--theme-a,#999),var(--theme-b,#ddd));box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
 .screen{display:none;height:100%;flex-direction:column;min-height:0}
 .screen.active{display:flex}
 
@@ -509,8 +518,6 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
   <h3>🌸 主题风格</h3>
   <p class="muted">选择整套主题，一键改变小手机的整体外观。</p>
   <div class="actions">
-    <button type="button" class="btn" data-theme="luxury">✦ 雾金高级感</button>
-    <button type="button" class="btn alt" data-theme="y2k">💿 蓝紫 Y2K</button>
     <button type="button" class="btn" data-theme="pink">🌸 粉紫梦幻</button>
     <button type="button" class="btn alt" data-theme="lavender">💜 薰衣草紫</button>
     <button type="button" class="btn alt" data-theme="cream">🍰 奶油色</button>
@@ -568,7 +575,9 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
 
     <div class="card">
       <h3>📦 主题管理</h3>
-      <p class="muted">高级感与 Y2K 是网站内置主题包。切换只改变外观，不覆盖聊天、记忆、角色资料、世界书、相册、语音或密钥。</p>
+      <p class="muted">导入一个主题包文件后，它会保存在这台设备的主题库里。应用主题只改变外观，不覆盖聊天、记忆、角色资料、世界书、相册、语音或密钥。</p>
+      <div class="actions"><button type="button" class="btn" id="themePackImport">导入主题包</button><button type="button" class="btn alt" id="themePackBasic">恢复基础主题</button><input hidden type="file" accept=".json,application/json" id="themePackInput"></div>
+      <div class="theme-library" id="themePackLibrary"></div>
     </div>
   </main>
 </section>
@@ -582,7 +591,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
 'use strict';
 /* 二、文字放 localStorage。读取失败时给出默认值而不让整页崩溃。 */
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
-const DEF={messages:[],memories:[],notes:[],moments:[],calls:[],world:[],voiceFavorites:[],interactionSamples:[],responseFeedback:[],summary:'',summaryIndex:0,lastOpen:'',today:'',todayText:'',historyMigration:{imports:[],lastImportId:'',verified:false,backupConfirmed:false},relationshipStyle:{profile:'',learnedAt:0,samples:0},proactiveState:{lastCheck:0,lastSentAt:0,lastSentDay:'',sentToday:0,period:'',activity:'',mood:'平静',nextCallAt:0,lastCallAt:0},persona:{name:'',callme:'',personality:'',catchphrase:'',taboo:'',first:'',extra:'',birthday:'',zodiac:'',hobbies:'',signature:''},api:{mode:'local',url:'',model:'',key:'',temperature:.8},voice:{enabled:false,key:'',voiceId:'ShenYanVoiceNatural20261107',model:'speech-2.8-hd',speed:1,endpoint:'https://api.minimax.cn/v1/t2a_v2'},settings:{name:'',footer:'有些话，只想说给你听。',theme:'pink',context:12,summarize:true,max:80,proactive:true,proactiveCalls:true,proactiveHours:3,quietStart:23,quietEnd:8,notifications:false},myProfile:{name:'我',signature:'',id:'',categories:{}},yanProfile:{name:'沈砚',signature:'',id:'',categories:{}}};
+const DEF={messages:[],memories:[],notes:[],moments:[],calls:[],world:[],voiceFavorites:[],interactionSamples:[],responseFeedback:[],summary:'',summaryIndex:0,lastOpen:'',today:'',todayText:'',historyMigration:{imports:[],lastImportId:'',verified:false,backupConfirmed:false},relationshipStyle:{profile:'',learnedAt:0,samples:0},proactiveState:{lastCheck:0,lastSentAt:0,lastSentDay:'',sentToday:0,period:'',activity:'',mood:'平静',nextCallAt:0,lastCallAt:0},persona:{name:'',callme:'',personality:'',catchphrase:'',taboo:'',first:'',extra:'',birthday:'',zodiac:'',hobbies:'',signature:''},api:{mode:'local',url:'',model:'',key:'',temperature:.8},voice:{enabled:false,key:'',voiceId:'ShenYanVoiceNatural20261107',model:'speech-2.8-hd',speed:1,endpoint:'https://api.minimax.cn/v1/t2a_v2'},settings:{name:'',footer:'有些话，只想说给你听。',theme:'pink',themePacks:[],activeThemePack:'',context:12,summarize:true,max:80,proactive:true,proactiveCalls:true,proactiveHours:3,quietStart:23,quietEnd:8,notifications:false},myProfile:{name:'我',signature:'',id:'',categories:{}},yanProfile:{name:'沈砚',signature:'',id:'',categories:{}}};
 
 const copy=x=>JSON.parse(JSON.stringify(x));
 let old={};
@@ -632,6 +641,7 @@ try{
 }catch(e){console.warn('语音 API Key 独立保存失败',e)}
 
 for(let k of ['messages','memories','notes','moments','calls','world','voiceFavorites','interactionSamples','responseFeedback'])if(!Array.isArray(data[k]))data[k]=[];
+if(!Array.isArray(data.settings.themePacks))data.settings.themePacks=[];
 const MEMORY_CATEGORIES=['用户资料','用户偏好','共同经历','角色经历','约定计划','其他'];
 data.memories=data.memories.map(m=>typeof m==='string'?{id:Date.now().toString(36)+Math.random().toString(36).slice(2,8),text:m,at:Date.now(),category:'其他',source:'legacy',active:true}:({...m,category:MEMORY_CATEGORIES.includes(m.category)?m.category:'其他',source:m.source||'legacy',active:m.active!==false})).filter(m=>String(m.text||'').trim());
 function save(){
@@ -1013,23 +1023,33 @@ async function refresh(){
   function objectUrl(item){if(!urls[item.id])urls[item.id]=URL.createObjectURL(item.blob);return urls[item.id]};function forgetUrls(){for(let u of Object.values(urls))URL.revokeObjectURL(u);urls={}}
 /* 四、桌面、主题和每天固定的一句话。 */
 const colors={luxury:['#98918f','#d8c2ad','#fff7e8','#e7d3c0','rgba(150,142,142,.7)','rgba(235,220,207,.16)','rgba(255,239,210,.36)','#d8ccc2','rgba(208,188,178,.34)','rgba(255,250,242,.17)','#a86672'],y2k:['#17265f','#a895ff','#f7f5ff','#bde9ff','rgba(52,68,139,.72)','rgba(116,110,214,.28)','rgba(167,231,255,.58)','#c5c7ec','rgba(57,117,238,.78)','rgba(199,201,255,.32)','#ef719d'],pink:['#f9e5f0','#9675b5','#514b56','#4e4a50','#fff9fc','#eddaee','#dbcede','#8b8290','#e8d9f4','#fff','#ab5365'],lavender:['#efe7fc','#8065b1','#4b455a','#54445c','#fcf9ff','#ddd0f2','#d6c6e8','#887c99','#e3d8fa','#fff','#aa546a'],cream:['#fff0e3','#b38799','#605458','#595054','#fffaf5','#f5e0d2','#e9d2c9','#98858a','#f3d9dc','#fff','#a95667'],dark:['#272334','#d0b4ef','#eee5f4','#74637b','#383144','#4c405c','#5b4e68','#b0a2bc','#675578','#453b50','#ad506b']};
+const THEME_TOKEN_KEYS=['bg','main','ink','accent','card','soft','line','muted','mine','other','danger'];
+function activeThemePack(){return data.settings.themePacks.find(pack=>pack.id===data.settings.activeThemePack)||null}
 function theme(){
-  let v=colors[data.settings.theme]||colors.pink;
+  const pack=activeThemePack();
+  let v=pack?THEME_TOKEN_KEYS.map((key,index)=>pack.tokens?.[key]||colors.pink[index]):(colors[data.settings.theme]||colors.pink);
 
   document.documentElement.dataset.theme=data.settings.theme||'pink';
+  document.documentElement.dataset.packStyle=pack?.style||'';
 
-  ['bg','main','ink','accent','card','soft','line','muted','mine','other','danger']
+  THEME_TOKEN_KEYS
     .forEach((key,i)=>document.documentElement.style.setProperty('--'+key,v[i]));
 
   const custom=data.settings.customColors||{};
 ['bg','main','card','mine','other'].forEach(key=>{
-    if(custom[key]){
+    if(!pack&&custom[key]){
       document.documentElement.style.setProperty('--'+key,custom[key]);
     }
   });
+  applyThemeWallpaper(pack);
+}
+function applyThemeWallpaper(pack=activeThemePack()){
+  const root=document.documentElement,item=pack?.wallpaperId?media.find(file=>file.id===pack.wallpaperId):null;
+  root.style.setProperty('--theme-wallpaper',item?`url("${objectUrl(item)}")`:'none');
 }
 function applyBeautyTheme(key){
   if(!colors[key])return;
+  data.settings.activeThemePack='';
   data.settings.theme=key;
   data.settings.customColors={};
   save();
@@ -1037,13 +1057,41 @@ function applyBeautyTheme(key){
   markActiveBeautyTheme();
 }
 function markActiveBeautyTheme(){
-  $$('#beauty [data-theme]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.theme===data.settings.theme)));
+  $$('#beauty [data-theme]').forEach(b=>b.setAttribute('aria-pressed',String(!data.settings.activeThemePack&&b.dataset.theme===data.settings.theme)));
+}
+function dataUrlBlob(value){
+  const match=String(value||'').match(/^data:([^;,]+);base64,(.+)$/);if(!match)throw Error('主题壁纸格式不正确');
+  const binary=atob(match[2]),bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);return new Blob([bytes],{type:match[1]});
+}
+function renderThemePackLibrary(){
+  const box=$('#themePackLibrary');if(!box)return;box.replaceChildren();
+  if(!data.settings.themePacks.length){box.append(node('div','empty','还没有导入主题包'));return;}
+  for(const pack of data.settings.themePacks){
+    const row=node('div','theme-item'),swatch=node('div','theme-swatch'),text=node('div');swatch.style.setProperty('--theme-a',pack.tokens?.bg||'#999');swatch.style.setProperty('--theme-b',pack.tokens?.main||'#ddd');text.append(node('b','',pack.name),node('div','muted',(pack.author||'小手叽主题')+' · v'+(pack.version||'1.0')));const buttons=node('div','actions');
+    buttons.append(action(data.settings.activeThemePack===pack.id?'使用中':'应用',()=>{data.settings.activeThemePack=pack.id;data.settings.customColors={};save();theme();renderThemePackLibrary();markActiveBeautyTheme();},data.settings.activeThemePack===pack.id?'':'alt'),action('删除',async()=>{if(!confirm('删除主题“'+pack.name+'”？聊天和记忆不会受影响。'))return;if(pack.wallpaperId)await mediaDelete(pack.wallpaperId);data.settings.themePacks=data.settings.themePacks.filter(item=>item.id!==pack.id);if(data.settings.activeThemePack===pack.id)data.settings.activeThemePack='';save();await refresh();theme();renderThemePackLibrary();},'danger'));
+    row.append(swatch,text,buttons);box.append(row);
+  }
+}
+async function importThemePack(file){
+  if(!file||file.size>12*1024*1024)throw Error('主题包不能超过 12MB');
+  const pack=JSON.parse(await file.text());if(pack.schema!=='my-little-phone-theme-v1')throw Error('不是小手叽主题包 v1');if(!pack.id||!pack.name||!pack.style||!pack.tokens)throw Error('主题包缺少名称、样式或配色');
+  if(!['luxury','y2k'].includes(pack.style))throw Error('当前版本不支持这个主题样式');
+  const safeTokens={};for(const key of THEME_TOKEN_KEYS)if(typeof pack.tokens[key]==='string'&&pack.tokens[key].length<80)safeTokens[key]=pack.tokens[key];
+  if(Object.keys(safeTokens).length<8)throw Error('主题配色不完整');
+  const existing=data.settings.themePacks.find(item=>item.id===pack.id);let wallpaperId=existing?.wallpaperId||'';
+  if(pack.wallpaper){const blob=dataUrlBlob(pack.wallpaper);wallpaperId='theme-wallpaper-'+String(pack.id).replace(/[^a-z0-9_-]/gi,'').slice(0,48);if(!await mediaWrite({id:wallpaperId,kind:'theme-wallpaper',name:pack.name+'.png',at:Date.now(),blob}))throw Error('主题壁纸保存失败');}
+  const stored={id:String(pack.id).slice(0,64),name:String(pack.name).slice(0,40),author:String(pack.author||'').slice(0,40),version:String(pack.version||'1.0').slice(0,16),style:pack.style,tokens:safeTokens,wallpaperId};
+  data.settings.themePacks=data.settings.themePacks.filter(item=>item.id!==stored.id);data.settings.themePacks.unshift(stored);data.settings.activeThemePack=stored.id;data.settings.customColors={};if(!save())throw Error('主题信息保存失败');await refresh();theme();renderThemePackLibrary();markActiveBeautyTheme();
 }
 function beauty(){
   $$('#beauty [data-theme]').forEach(b=>{
     b.onclick=()=>applyBeautyTheme(b.dataset.theme);
   });
   markActiveBeautyTheme();
+  renderThemePackLibrary();
+  $('#themePackImport').onclick=()=>$('#themePackInput').click();
+  $('#themePackBasic').onclick=()=>{data.settings.activeThemePack='';save();theme();renderThemePackLibrary();markActiveBeautyTheme();};
+  $('#themePackInput').onchange=async event=>{const file=event.target.files?.[0];if(!file)return;try{await importThemePack(file);alert('主题包已保存到主题管理并立即应用。')}catch(error){alert('主题包导入失败：'+error.message)}event.target.value='';};
 
   setupLockWallpaper();
   loadLockWallpaper();
@@ -3088,6 +3136,7 @@ $('#enableNotifications').onclick=async()=>{
 };
 try{
   theme();
+  refresh().then(()=>theme()).catch(e=>console.warn('主题素材加载失败',e));
   clock();
   loadLockWallpaper();
   loadMyAvatar();
