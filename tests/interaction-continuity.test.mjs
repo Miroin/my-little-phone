@@ -29,5 +29,8 @@ assert.deepEqual(recentConversationMessages(2).map(x=>x.text),messages.map(x=>x.
 assert.match(html,/if\(source!=='user'\)return \[\];/,'模型回复不应自动写入长期事实');
 assert.match(html,/filter\(x=>x\.m\.pinned\|\|x\.matches>0\)/,'无关键词命中的普通记忆不应注入');
 assert.doesNotMatch(sourceBetween('function attachRelationshipRule','function memoryClean'),/role!=='user'/,'互动规则不应再追加到用户原话');
+assert.match(html,/function goBack\(\)/,'页面必须有上一级返回栈');
+assert.match(html,/\.back\[data-home\],\.back\[data-go\]/,'所有左上角返回键必须使用上一级返回');
+assert.match(html,/chat\(\{preserveScroll:true\}\)/,'消息工具操作必须保留当前阅读位置');
 
-console.log(`通过：${cases.length} 个固定场景、按轮上下文、记忆污染和规则注入检查`);
+console.log(`通过：${cases.length} 个固定场景、按轮上下文、记忆污染、规则注入、返回层级和滚动位置检查`);

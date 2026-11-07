@@ -612,7 +612,14 @@ const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8),name
 const date=t=>new Date(t||Date.now()).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}),day=()=>{let d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
 function node(tag,cls,text){let x=document.createElement(tag);if(cls)x.className=cls;if(text!==undefined)x.textContent=String(text);return x}
 function action(text,fn,kind='alt'){let b=node('button','btn '+kind+' small',text);b.type='button';b.onclick=fn;return b}
-function show(id){
+const navigationStack=[];
+function currentScreen(){return document.querySelector('.screen.active')?.id||''}
+function show(id,options={}){
+  const current=currentScreen(),record=options.record!==false;
+  if(current&&current!==id&&record){
+    if(id==='home')navigationStack.length=0;
+    else if(navigationStack[navigationStack.length-1]!==current)navigationStack.push(current);
+  }
   $$('.screen').forEach(s=>{
     s.classList.toggle('active',s.id===id);
   });
@@ -648,7 +655,12 @@ function show(id){
       .catch(e=>console.warn('页面加载失败',e));
   }
 }
-$$('[data-home]').forEach(b=>b.onclick=()=>show('home'));$$('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
+function goBack(){
+  let target='home';
+  while(navigationStack.length){const candidate=navigationStack.pop();if(candidate&&candidate!==currentScreen()){target=candidate;break}}
+  show(target,{record:false});
+}
+$$('.back[data-home],.back[data-go]').forEach(b=>b.onclick=goBack);$$('[data-go]:not(.back)').forEach(b=>b.onclick=()=>show(b.dataset.go));
 /* 三、IndexedDB 中只放图片和音乐 Blob，保护文字存储空间。 */
 let dbWait;function db(){if(dbWait)return dbWait;dbWait=new Promise((ok,bad)=>{try{let r=indexedDB.open('rp_phone_media_v2',2);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('files'))r.result.createObjectStore('files',{keyPath:'id'});if(!r.result.objectStoreNames.contains('history')){const store=r.result.createObjectStore('history',{keyPath:'id'});store.createIndex('importId','importId',{unique:false});store.createIndex('at','at',{unique:false})}};r.onsuccess=()=>ok(r.result);r.onerror=()=>bad(r.error)}catch(e){bad(e)}}).catch(e=>{dbWait=null;throw e});return dbWait}
 let mediaReadErrorShown=false;
@@ -1568,7 +1580,7 @@ async function deliverAssistantReply(contextText){
 }
 let speakingMessageId='',voiceAudio=new Audio(),voiceObjectUrl='';
 const transcriptOpen=new Set();
-async function refreshVoiceUi(){await chat();if($('#recallVoicesPanel')&&!$('#recallVoicesPanel').hidden)voiceFavorites();}
+async function refreshVoiceUi(){await chat({preserveScroll:true});if($('#recallVoicesPanel')&&!$('#recallVoicesPanel').hidden)voiceFavorites();}
 function voiceSeconds(text){return Math.max(2,Math.round(String(text||'').length/4.8))}
 function hexAudioBlob(hex){
   const clean=String(hex||'').trim();if(!clean||clean.length%2)throw new Error('语音数据不完整');
@@ -1583,10 +1595,10 @@ async function requestMiniMaxVoice(text){
   }catch(e){if(e.name==='AbortError')throw new Error('MiniMax 语音生成超时');if(e instanceof TypeError)throw new Error('浏览器拦截了 MiniMax 跨域请求');throw e}finally{clearTimeout(timer)}
 }
 async function generateVoiceForMessage(message){
-  if(!message?.text||message.voiceClipId)return message;message.voiceStatus='loading';save();await chat();
+  if(!message?.text||message.voiceClipId)return message;message.voiceStatus='loading';save();await chat({preserveScroll:true});
   try{const result=await requestMiniMaxVoice(message.text),id=uid();await mediaWrite({id,kind:'voice',name:'voice_'+message.id+'.mp3',at:Date.now(),blob:result.blob});message.voiceClipId=id;message.voiceSeconds=result.seconds;message.voiceStatus='ready';delete message.voiceError;save();await refresh();}
   catch(e){message.voiceStatus='error';message.voiceError=e.message;save();console.warn('语音生成失败',e)}
-  await chat();return message;
+  await chat({preserveScroll:true});return message;
 }
 async function stopVoice(refreshChat=true){voiceAudio.pause();voiceAudio.removeAttribute('src');if(voiceObjectUrl){URL.revokeObjectURL(voiceObjectUrl);voiceObjectUrl=''}speakingMessageId='';if(refreshChat)await refreshVoiceUi();}
 async function playVoice(message){
@@ -1594,7 +1606,7 @@ async function playVoice(message){
 }
 function voiceFavorite(message){return data.voiceFavorites.find(item=>item.messageId===message.id)}
 async function toggleVoiceFavorite(message){
-  const existing=voiceFavorite(message);if(existing)data.voiceFavorites=data.voiceFavorites.filter(item=>item.id!==existing.id);else if(message.voiceClipId)data.voiceFavorites.unshift({id:uid(),messageId:message.id,voiceClipId:message.voiceClipId,voiceSeconds:message.voiceSeconds,text:message.text,at:Date.now(),messageAt:message.at});save();await chat();
+  const existing=voiceFavorite(message);if(existing)data.voiceFavorites=data.voiceFavorites.filter(item=>item.id!==existing.id);else if(message.voiceClipId)data.voiceFavorites.unshift({id:uid(),messageId:message.id,voiceClipId:message.voiceClipId,voiceSeconds:message.voiceSeconds,text:message.text,at:Date.now(),messageAt:message.at});save();await chat({preserveScroll:true});
 }
 const thoughtOpen=new Set(),thoughtBusy=new Set();
 function responseRating(messageId){return data.responseFeedback.find(x=>x.messageId===messageId)?.verdict||''}
@@ -1608,12 +1620,12 @@ function rateAssistantResponse(message,verdict){
     if(duplicate){duplicate.weight=Math.min(5,(Number(duplicate.weight)||0)+1);duplicate.approved=true;duplicate.active=true;}
     else data.interactionSamples.unshift({id:uid(),scene:interactionScene(previous.text),userText:previous.text,yanText:message.text,contextBefore:'',source:'user-feedback',sourceMessageId:message.id,at:Date.now(),weight:2,approved:true,active:true});
   }
-  save();chat();
+  save();chat({preserveScroll:true});
 }
 async function toggleThought(messageId){
-  if(thoughtOpen.has(messageId)){thoughtOpen.delete(messageId);await chat();return;}
-  thoughtOpen.add(messageId);const message=data.messages.find(item=>item.id===messageId);if(!message||message.thought||message.thoughtUnavailable){await chat();return;}
-  if(thoughtBusy.has(messageId))return;thoughtBusy.add(messageId);await chat();
+  if(thoughtOpen.has(messageId)){thoughtOpen.delete(messageId);await chat({preserveScroll:true});return;}
+  thoughtOpen.add(messageId);const message=data.messages.find(item=>item.id===messageId);if(!message||message.thought||message.thoughtUnavailable){await chat({preserveScroll:true});return;}
+  if(thoughtBusy.has(messageId))return;thoughtBusy.add(messageId);await chat({preserveScroll:true});
   let thought='';
   if(data.api.mode==='api'&&data.api.url&&data.api.model){
     try{
@@ -1621,9 +1633,10 @@ async function toggleThought(messageId){
       thought=await request([{role:'system',content:promptSystem(message.text)+'\n\n现在写的是沈砚在开口前后真实流过脑海、没有说出口的内心。主语就是“我”，直接待在念头里，不站到外面分析自己，也不计算怎样扮演或怎样让陈钰满意。抓住她刚才话里一个真正让你在意的细节，让念头自然地往下走；允许停顿、改口、矛盾、走神、很生活的小事和没得出结论。它不必好听、不必完整、不必总结情绪，也不是给人看的文案。不要列点、不要标题、不要解释任务、不要复述已经发出的回复。写一段自然中文，只输出内心本身。'},{role:'user',content:'她刚才说：'+(previous||'（没说具体内容）')+'\n我后来回她：'+message.text+'\n把那一刻实际从我脑子里经过、但没有说出口的内容原样留下。'}]);
     }catch(error){console.warn('心绪生成失败，本次不使用替代文案',error);}
   }
-  thought=String(thought||'').replace(/^(此刻心绪|心绪|内心)[：:\s]*/,'').trim();if(/我应该|可以先|用户|对方需要|根据.{0,4}(设定|人设)/.test(thought))thought='';if(thought){message.thought=thought.slice(0,1200);message.thoughtAt=Date.now()}else message.thoughtUnavailable=true;thoughtBusy.delete(messageId);save();await chat();
+  thought=String(thought||'').replace(/^(此刻心绪|心绪|内心)[：:\s]*/,'').trim();if(/我应该|可以先|用户|对方需要|根据.{0,4}(设定|人设)/.test(thought))thought='';if(thought){message.thought=thought.slice(0,1200);message.thoughtAt=Date.now()}else message.thoughtUnavailable=true;thoughtBusy.delete(messageId);save();await chat({preserveScroll:true});
 }
-  async function chat(){
+  async function chat(options={}){
+  const scroll=$('#chatScroll'),previousTop=scroll?.scrollTop||0;
   if(!await refresh())return;
 
   let box=$('#chatList');
@@ -1674,7 +1687,7 @@ async function toggleThought(messageId){
       const tools=node('div','message-tools'),button=node('button','',thoughtOpen.has(m.id)?'收起心绪':'心绪');button.type='button';button.onclick=()=>toggleThought(m.id);tools.append(button);
       const rating=responseRating(m.id),like=node('button','',rating==='like'?'♥ 像沈砚':'♡ 像沈砚'),dislike=node('button','',rating==='dislike'?'已标记不像':'不像沈砚');like.type=dislike.type='button';like.onclick=()=>rateAssistantResponse(m,'like');dislike.onclick=()=>rateAssistantResponse(m,'dislike');tools.append(like,dislike);
       if(m.voiceRequested){
-        const transcriptButton=node('button','',transcriptOpen.has(m.id)?'收起文字':'转文字');transcriptButton.type='button';transcriptButton.onclick=()=>{transcriptOpen.has(m.id)?transcriptOpen.delete(m.id):transcriptOpen.add(m.id);chat()};tools.append(transcriptButton);
+        const transcriptButton=node('button','',transcriptOpen.has(m.id)?'收起文字':'转文字');transcriptButton.type='button';transcriptButton.onclick=()=>{transcriptOpen.has(m.id)?transcriptOpen.delete(m.id):transcriptOpen.add(m.id);chat({preserveScroll:true})};tools.append(transcriptButton);
         if(m.voiceClipId){const favoriteButton=node('button','',voiceFavorite(m)?'★ 已收藏':'☆ 收藏');favoriteButton.type='button';favoriteButton.onclick=()=>toggleVoiceFavorite(m);tools.append(favoriteButton)}
       }
       body.append(tools);
@@ -1690,7 +1703,7 @@ async function toggleThought(messageId){
     box.append(row);
   }
 
-  $('#chatScroll').scrollTop=$('#chatScroll').scrollHeight;
+  $('#chatScroll').scrollTop=options.preserveScroll?previousTop:$('#chatScroll').scrollHeight;
 
   loadMyAvatar();
   loadYanAvatar();
@@ -2425,7 +2438,7 @@ $('#personaInput').onchange=async e=>{
   }catch(error){alert('角色卡导入失败：'+error.message);}
   finally{e.target.value='';}
 };
-$('#personaImportCancel').onclick=()=>{pendingCharacterImport=null;show('persona');};
+$('#personaImportCancel').onclick=()=>{pendingCharacterImport=null;goBack();};
 $('#personaImportApply').onclick=()=>{
   try{
     const selected=selectedCharacterImport();
