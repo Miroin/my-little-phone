@@ -1929,7 +1929,7 @@ $('#historyInput').onchange=async e=>{
 };
 async function prepareHistoryArchive(){if(!historyDraft)throw Error('请先选择聊天文件');await historyStore(historyDraft.messages,historyDraft.importId);if(!(data.historyMigration.imports||[]).some(x=>x.fingerprint===historyDraft.fingerprint)){data.historyMigration.imports.push({id:historyDraft.importId,fingerprint:historyDraft.fingerprint,fileName:historyDraft.fileName,messageCount:historyDraft.messages.length,archivedAt:Date.now(),status:'archived'});data.historyMigration.lastImportId=historyDraft.importId;save()}}
 $('#historyLocalExtract').onclick=async()=>{try{await prepareHistoryArchive();historyCandidates=historyLocalCandidates(historyDraft.messages);$('#historyProgress').value=100;renderHistoryCandidates()}catch(error){alert(error.message)}};
-async function historyRequestWithRetry(messages){let lastError;for(let attempt=1;attempt<=3;attempt++){try{return await request(messages,{timeout:120000})}catch(error){lastError=error;if(attempt<3){$('#historyStatus').textContent='本批处理较慢，正在第 '+(attempt+1)+' 次重试…';await new Promise(resolve=>setTimeout(resolve,1200*attempt))}}}throw lastError}
+async function historyRequestWithRetry(messages){let lastError;for(let attempt=1;attempt<=5;attempt++){try{return await request(messages,{timeout:120000})}catch(error){lastError=error;if(attempt<5){$('#historyStatus').textContent='本批接口暂时异常，正在第 '+(attempt+1)+' 次重试…';await new Promise(resolve=>setTimeout(resolve,1800*attempt))}}}throw lastError}
 async function historyRefineBatch(items,batchNo,total){
   const payload=items.map((x,index)=>({index:index+1,text:x.text,category:x.category,evidenceAt:x.evidenceAt}));
   const answer=await historyRequestWithRetry([{role:'system',content:'你是长期记忆整理器。合并表达同一事实、同一经历或同一约定的候选，删除临时寒暄、重复问答、测试语句、角色扮演指令和对未来相处无用的碎片。必须保留互不相同的用户资料、稳定偏好、共同经历、感情发展、角色经历与明确约定。每条改写成独立、简洁、有主语、可长期理解的自然中文，优先 20 至 100 字。本批最多输出 10 条。输出严格 JSON 数组，每项仅含 text、category、evidenceAt；category只能是用户资料、用户偏好、共同经历、角色经历、约定计划、其他之一；evidenceAt沿用最相关原候选的值。不要输出说明或 Markdown。'},{role:'user',content:'这是第 '+batchNo+' / '+total+' 批候选：\n'+JSON.stringify(payload)}]);
@@ -1945,25 +1945,28 @@ $('#historyRefine').onclick=async()=>{
   const button=$('#historyRefine'),meta=data.historyMigration.imports.find(x=>x.id===historyDraft.importId);button.disabled=true;
   try{
     if(!Array.isArray(meta.originalCandidates))meta.originalCandidates=copy(historyCandidates);
+    const sourceSignature=historyFingerprint(chosen.map(x=>x.id+'|'+x.text).join('\n'));
+    if(meta.refineSourceSignature!==sourceSignature){meta.refineSourceSignature=sourceSignature;meta.refineCandidates=[];meta.nextRefineChunk=0}
     meta.status='refining';save();
-    const chunks=[];for(let i=0;i<chosen.length;i+=60)chunks.push(chosen.slice(i,i+60));
-    const refined=[];
-    for(let i=0;i<chunks.length;i++){
+    const chunks=[];for(let i=0;i<chosen.length;i+=30)chunks.push(chosen.slice(i,i+30));
+    const refined=Array.isArray(meta.refineCandidates)?copy(meta.refineCandidates):[],start=Math.min(Number(meta.nextRefineChunk)||0,chunks.length);
+    for(let i=start;i<chunks.length;i++){
       $('#historyStatus').textContent='正在智能精简第 '+(i+1)+' / '+chunks.length+' 批…';
       const result=await historyRefineBatch(chunks[i],i+1,chunks.length);
       for(const x of result){const same=refined.find(y=>memorySimilarity(y.text,x.text)>.82);if(!same)refined.push(x);else if(x.text.length>same.text.length)Object.assign(same,x,{id:same.id})}
+      meta.refineCandidates=copy(refined);meta.nextRefineChunk=i+1;meta.status='refining';save();
       $('#historyProgress').value=Math.round((i+1)*100/chunks.length);
     }
     if(!refined.length)throw Error('DeepSeek 没有返回可用记忆');
-    historyCandidates=refined;meta.candidates=historyCandidates;meta.status='refined';meta.refinedAt=Date.now();meta.refinedFrom=chosen.length;save();renderHistoryCandidates();
+    historyCandidates=refined;meta.candidates=historyCandidates;meta.status='refined';meta.refinedAt=Date.now();meta.refinedFrom=chosen.length;delete meta.refineCandidates;delete meta.nextRefineChunk;delete meta.refineSourceSignature;save();renderHistoryCandidates();
     $('#historyStatus').textContent='智能精简完成：'+chosen.length+' 条整理为 '+refined.length+' 条。请检查后再写入。';
-  }catch(error){meta.status='extracted';save();alert('智能精简暂停：'+error.message+'。原来的 '+historyCandidates.length+' 条候选没有被覆盖，可以重试。')}
+  }catch(error){meta.status='refining';save();alert('智能精简暂停：'+error.message+'。原来的 '+historyCandidates.length+' 条候选没有被覆盖；再次点击“智能精简”会从已保存的批次继续。')}
   finally{button.disabled=false;renderHistoryCandidates()}
 };
 $('#historyRestoreCandidates').onclick=()=>{
   const meta=data.historyMigration?.imports?.find(x=>x.id===historyDraft?.importId);if(!Array.isArray(meta?.originalCandidates))return;
   if(!confirm('恢复精简前的 '+meta.originalCandidates.length+' 条候选？当前精简结果仍可重新生成。'))return;
-  historyCandidates=copy(meta.originalCandidates);meta.candidates=historyCandidates;meta.status='extracted';delete meta.originalCandidates;save();renderHistoryCandidates();
+  historyCandidates=copy(meta.originalCandidates);meta.candidates=historyCandidates;meta.status='extracted';delete meta.originalCandidates;delete meta.refineCandidates;delete meta.nextRefineChunk;delete meta.refineSourceSignature;save();renderHistoryCandidates();
   $('#historyStatus').textContent='已恢复精简前候选。';
 };
 $('#historyExtract').onclick=async()=>{
