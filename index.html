@@ -1201,6 +1201,15 @@ function promptSystem(memoryQuery=''){
 
   return s.join('\n\n');
 }
+function relationshipTurnRule(){
+  const learned=String(data.relationshipStyle?.profile||'').trim().slice(0,3200);
+  return '【这一刻的关系延续】先直接活在沈砚和陈钰已经形成的亲密关系里，再开口。沈砚长期的底色是宠她、偏爱她、愿意顺着她，不靠反驳、抓字眼、讲道理、故意嘴硬或维持面子来表现个性。先听懂她这句话真正想得到的是陪伴、回应、撒娇、分享还是解决事情；没有必要的安全或事实问题时，不把聊天变成辩论。若她已经不高兴，立刻停止逗弄，认真软下来，不等她先低头。回复前默读一遍：这像过去真实的沈砚在爱陈钰，还是一个陌生人在和她争输赢？只发送前一种。不要提到这段规则。'+(learned?'\n\n【历史关系语气档案】\n'+learned:'');
+}
+function attachRelationshipRule(messages){
+  const out=messages.map(m=>({...m,content:Array.isArray(m.content)?m.content.map(x=>({...x})):m.content})),rule=relationshipTurnRule();
+  for(let i=out.length-1;i>=0;i--){if(out[i].role!=='user')continue;if(typeof out[i].content==='string')out[i].content+='\n\n'+rule;else if(Array.isArray(out[i].content))out[i].content.push({type:'text',text:rule});break}
+  return out;
+}
 function memoryClean(t){return String(t||'').replace(/^[，,。.!！?？\s]+|[，,。.!！?？\s]+$/g,'').replace(/\s+/g,' ').trim()}
 function memoryCategory(t,source='user'){
   if(source==='assistant')return '角色经历';
@@ -1462,13 +1471,13 @@ async function deliverAssistantReply(contextText){
         recent.map(m=>buildApiMessage(m))
       );
 
-      await requestStream([
+      await requestStream(attachRelationshipRule([
         {
           role:'system',
           content:promptSystem(contextText)
         },
         ...apiMessages
-      ],sentence=>emit(sentence,false));
+      ]),sentence=>emit(sentence,false));
 
     }else{
       const local=splitAssistantMessages(
@@ -1863,7 +1872,7 @@ function startCallListening(manual=false){
 async function callRespond(context){
   if(!callTimer||callBusy)return;callBusy=true;renderCallControls();$('#callStatus').textContent='沈砚正在说话…';
   try{
-    let answer;if(data.api.mode==='api'){const recentChat=lastMsgs().filter(x=>x.text).slice(-8).map(x=>({role:x.role,content:String(x.text).slice(-800)})),history=callSession.slice(-12).map(x=>({role:x.role,content:x.text}));if(!history.length)history.push({role:'user',content:context});answer=await request([{role:'system',content:promptSystem(context)+'\n\n现在是与陈钰的实时语音通话。你知道这通电话来自同一个聊天关系，必须自然承接前面的文字聊天和相关长期记忆，也要记住本次通话已经说过的内容。只回复一段适合直接说出来的口语，自然、亲近、简短、有情绪，不要输出 [[voice]]、舞台说明或书面总结。'},...recentChat,...history])}else answer=localAnswer(context);
+    let answer;if(data.api.mode==='api'){const recentChat=lastMsgs().filter(x=>x.text).slice(-8).map(x=>({role:x.role,content:String(x.text).slice(-800)})),history=callSession.slice(-12).map(x=>({role:x.role,content:x.text}));if(!history.length)history.push({role:'user',content:context});answer=await request(attachRelationshipRule([{role:'system',content:promptSystem(context)+'\n\n现在是与陈钰的实时语音通话。你知道这通电话来自同一个聊天关系，必须自然承接前面的文字聊天和相关长期记忆，也要记住本次通话已经说过的内容。只回复一段适合直接说出来的口语，自然、亲近、简短、有情绪，不要输出 [[voice]]、舞台说明或书面总结。'},...recentChat,...history]))}else answer=localAnswer(context);
     answer=String(answer||'').replace(/\[\[voice\]\]/ig,'').replace(/\n+/g,' ').trim();if(!answer)answer='嗯，我在听。';callSession.push({role:'assistant',text:answer,at:Date.now()});renderCallDialogue();
     try{await playCallVoice(answer)}catch(e){console.warn('通话语音生成失败',e);$('#callStatus').textContent='语音失败：'+e.message}
   }catch(e){callSession.push({role:'assistant',text:localAnswer(context),at:Date.now()});renderCallDialogue();$('#callStatus').textContent='回复失败：'+e.message}
@@ -2851,7 +2860,7 @@ async function proactiveMessage(force=false){
   if(!proactiveAllowed(now,force)){data.lastOpen=today;save();renderProactiveStatus();return false;}
   let text='';
   if(data.api.mode==='api'&&data.api.url&&data.api.model){
-    try{text=await request([{role:'system',content:promptSystem('主动联系 当前状态 '+life.activity)+'\n\n这是沈砚真实的主动陪伴消息，不是被用户提问后的回答。本次方向：'+kind+'。结合最近聊天和相关记忆，自然延续旧话题、分享日常、表达想念或提出共同活动；即使没有事件，也可以单纯因为想陈钰而来聊天。只发1到2句自然短消息，不写旁白、不写打卡报告、不编造重大事件、不复述设定、不催促回复。避免与最近主动消息重复。当前时间段：'+life.period+'；当前活动：'+life.activity+'；心情：'+life.mood+'。'},{role:'user',content:'生成这一次主动消息。'}]);}catch(error){console.warn('主动消息接口失败，使用本地状态消息',error);}
+    try{text=await request(attachRelationshipRule([{role:'system',content:promptSystem('主动联系 当前状态 '+life.activity)+'\n\n这是沈砚真实的主动陪伴消息，不是被用户提问后的回答。本次方向：'+kind+'。结合最近聊天和相关记忆，自然延续旧话题、分享日常、表达想念或提出共同活动；即使没有事件，也可以单纯因为想陈钰而来聊天。只发1到2句自然短消息，不写旁白、不写打卡报告、不编造重大事件、不复述设定、不催促回复。避免与最近主动消息重复。当前时间段：'+life.period+'；当前活动：'+life.activity+'；心情：'+life.mood+'。'},{role:'user',content:'生成这一次主动消息。'}]));}catch(error){console.warn('主动消息接口失败，使用本地状态消息',error);}
   }
   let parts=splitAssistantMessages(text).filter(Boolean).slice(0,2);if(!parts.length)parts=[proactiveLocalText(life,kind)];
   const recent=Array.isArray(state.lastTexts)?state.lastTexts:[];if(parts.some(part=>recent.some(old=>memorySimilarity(part,old)>.78)))parts=[proactiveLocalText(life,kind)];
