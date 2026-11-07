@@ -454,7 +454,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
   </main>
 </section>
 <section class="screen" id="memory"><header class="head"><button class="back" data-home>‹</button><b>长期记忆</b><button class="btn small" id="newMemory">添加</button></header><main class="body"><p class="muted">记忆会自动分类、去重，并按当前话题检索。固定人设不会被普通聊天覆盖。</p><div class="actions"><button class="btn alt" data-go="historyMigration">迁移历史聊天</button></div><div class="card"><div class="row"><select id="memoryFilter" class="grow"><option value="">全部分类</option><option>用户资料</option><option>用户偏好</option><option>共同经历</option><option>角色经历</option><option>约定计划</option><option>其他</option></select><input id="memorySearch" class="grow" placeholder="搜索记忆"></div></div><div id="memoryList"></div></main></section>
-<section class="screen" id="historyMigration"><header class="head"><button class="back" data-go="memory">‹</button><b>历史聊天迁移</b></header><main class="body"><div class="card"><h3>第一步：选择聊天文件</h3><p class="muted">支持 ChatGPT conversations.json。读取后只预览，不会立刻写入长期记忆。</p><button class="btn" id="historyPick">选择 conversations.json</button><input hidden id="historyInput" type="file" accept=".json,application/json"><p id="historyStatus" class="muted">尚未选择文件</p></div><div class="card" id="historyPreview" hidden><h3>导入预览</h3><div id="historySummary"></div><div class="actions"><button class="btn" id="historyExtract">用 DeepSeek 提取记忆</button><button class="btn alt" id="historyLocalExtract">先做本地初筛</button></div><progress id="historyProgress" max="100" value="0" style="width:100%"></progress></div><div class="card" id="historyCandidatesCard" hidden><h3>候选记忆</h3><p class="muted" id="historyCandidateSummary">还没有候选记忆</p><div class="actions"><button class="btn" id="historyRefine" type="button">DeepSeek 智能精简</button><button class="btn alt" id="historyRestoreCandidates" type="button" hidden>恢复精简前候选</button></div><div class="row"><select id="historyCandidateCategory" class="grow"><option value="">全部分类</option><option>用户资料</option><option>用户偏好</option><option>共同经历</option><option>角色经历</option><option>约定计划</option><option>其他</option></select><input class="grow" id="historyCandidateSearch" placeholder="搜索候选记忆"></div><div class="actions"><button class="btn alt small" id="historySelectVisible" type="button">选中当前结果</button><button class="btn alt small" id="historyClearVisible" type="button">取消当前结果</button></div><div class="history-candidate-list" id="historyCandidates"></div><div class="actions"><button class="btn" id="historyApply">确认写入选中的记忆</button></div></div><div class="card"><h3>从历史聊天学习沈砚的语气</h3><p class="muted">事实记忆和说话习惯分开保存。这里会分析已归档对话里沈砚如何宠你、安慰你、调侃你和处理分歧，不改动原聊天。</p><textarea id="historyStyleProfile" rows="10" placeholder="尚未生成关系语气档案"></textarea><p class="muted" id="historyStyleStatus"></p><div class="actions"><button class="btn" id="historyLearnStyle" type="button">从历史聊天学习语气</button><button class="btn alt" id="historySaveStyle" type="button">保存编辑</button></div></div><div class="card"><h3>原始聊天检索</h3><div class="row"><input class="grow" id="historySearch" placeholder="搜索已归档的历史聊天"><button class="btn alt" id="historySearchBtn">搜索</button></div><div id="historySearchResult"></div></div></main></section>
+<section class="screen" id="historyMigration"><header class="head"><button class="back" data-go="memory">‹</button><b>历史聊天迁移</b></header><main class="body"><div class="card"><h3>第一步：选择聊天文件</h3><p class="muted">支持 ChatGPT conversations.json。读取后只预览，不会立刻写入长期记忆。</p><button class="btn" id="historyPick">选择 conversations.json</button><input hidden id="historyInput" type="file" accept=".json,application/json"><p id="historyStatus" class="muted">尚未选择文件</p></div><div class="card" id="historyPreview" hidden><h3>导入预览</h3><div id="historySummary"></div><div class="actions"><button class="btn" id="historyExtract">用 DeepSeek 提取记忆</button><button class="btn alt" id="historyLocalExtract">先做本地初筛</button></div><progress id="historyProgress" max="100" value="0" style="width:100%"></progress></div><div class="card" id="historyCandidatesCard" hidden><h3>候选记忆</h3><p class="muted" id="historyCandidateSummary">还没有候选记忆</p><div class="actions"><button class="btn" id="historyRefine" type="button">DeepSeek 智能精简</button><button class="btn alt" id="historyRestoreCandidates" type="button" hidden>恢复精简前候选</button></div><div class="row"><select id="historyCandidateCategory" class="grow"><option value="">全部分类</option><option>用户资料</option><option>用户偏好</option><option>共同经历</option><option>角色经历</option><option>约定计划</option><option>其他</option></select><input class="grow" id="historyCandidateSearch" placeholder="搜索候选记忆"></div><div class="actions"><button class="btn alt small" id="historySelectVisible" type="button">选中当前结果</button><button class="btn alt small" id="historyClearVisible" type="button">取消当前结果</button></div><div class="history-candidate-list" id="historyCandidates"></div><div class="actions"><button class="btn" id="historyApply">确认写入选中的记忆</button></div></div><div class="card"><h3>从历史聊天学习沈砚的语气</h3><p class="muted">事实记忆和说话习惯分开保存。这里会分析已归档对话里沈砚如何宠你、安慰你、调侃你和处理分歧，不改动原聊天。</p><textarea id="historyStyleProfile" rows="10" placeholder="尚未生成关系语气档案"></textarea><p class="muted" id="historyStyleStatus"></p><div class="actions"><button class="btn" id="historyLearnStyle" type="button">从历史聊天学习语气</button><button class="btn alt" id="historySaveStyle" type="button">保存编辑</button></div></div><div class="card"><h3>真实互动样本</h3><p class="muted" id="interactionSampleSummary">尚未整理样本</p><div class="row"><select id="interactionSampleScene" class="grow"><option value="">全部情境</option><option>情绪支持</option><option>亲密撒娇</option><option>玩笑调侃</option><option>冲突修复</option><option>意见分歧</option><option>日常分享</option><option>暂时离开</option><option>主动陪伴</option></select></div><div id="interactionSampleList"></div></div><div class="card"><h3>原始聊天检索</h3><div class="row"><input class="grow" id="historySearch" placeholder="搜索已归档的历史聊天"><button class="btn alt" id="historySearchBtn">搜索</button></div><div id="historySearchResult"></div></div></main></section>
 <section class="screen" id="persona"><header class="head"><button class="back" data-home>‹</button><b>人设卡</b><button class="btn small" id="personaImport">导入角色卡</button><input hidden type="file" accept=".json,.txt,text/plain,application/json" id="personaInput"></header><main class="body"><form id="personaForm"><div id="personaFields"></div><button class="btn">保存并立即生效</button></form><p class="muted">支持 JSON 角色卡及“字段：内容”文本。人物档案按六大分类展示，可在下方编辑并保存。</p></main></section>
 <section class="screen" id="world"><header class="head"><button class="back" data-home>‹</button><b>世界书</b><button class="btn small" id="newWorld">添加条目</button></header><main class="body"><div class="actions"><button class="btn alt small" id="worldImport">导入 JSON</button><button class="btn alt small" id="worldExport">导出 JSON</button><input hidden type="file" accept=".json,application/json" id="worldInput"></div><p class="muted">常驻条目一直发送，非驻留条目仅在最近消息命中关键词时发送。</p><div id="worldList"></div></main></section>
 <section class="screen" id="api"><header class="head"><button class="back" data-home>‹</button><b>接口</b></header><main class="body"><form id="apiForm"><div class="card"><h3>聊天模型</h3><div class="field"><label>模式</label><select id="mode"><option value="local">本地关键词（完全离线）</option><option value="api">接口模型</option></select></div><div class="field"><label>接口地址</label><input id="endpoint" placeholder="https://example.com/v1/chat/completions"></div><div class="field"><label>模型名</label><input id="model" placeholder="请填真实模型名"></div><div class="field"><label>钥匙（仅保存在此浏览器；不加密）</label><input id="key" type="password" autocomplete="off"></div><div class="field"><label>随机性 <span id="temperatureText"></span></label><input id="temperature" type="range" min="0" max="2" step="0.1"></div></div><div class="card"><h3>MiniMax 语音</h3><div class="field"><label class="switch">允许沈砚自主发语音 <input id="voiceEnabled" type="checkbox"></label></div><div class="field"><label>MiniMax API Key（仅存在此浏览器）</label><input id="voiceKey" type="password" autocomplete="off" placeholder="sk-api-..."></div><div class="field"><label>音色 ID</label><input id="voiceId" value="ShenYanVoiceNatural20261107"></div><div class="field"><label>模型</label><select id="voiceModel"><option value="speech-2.8-hd">speech-2.8-hd（更自然）</option><option value="speech-2.8-turbo">speech-2.8-turbo（更省）</option></select></div><div class="field"><label>语速 <span id="voiceSpeedText"></span></label><input id="voiceSpeed" type="range" min="0.8" max="1.2" step="0.01"></div><p class="muted">不会把语音密钥写入备份或 GitHub。只有真正生成语音时才会计费。</p></div><div class="actions"><button class="btn">保存全部接口</button><button class="btn alt" type="button" id="test">测试聊天</button><button class="btn alt" type="button" id="testVoice">测试语音</button></div></form><p class="card" id="testResult">测试结果会显示在这里，不写入聊天。</p><p class="muted">聊天接口要求 OpenAI 兼容 chat/completions。MiniMax 语音会使用你选定的克隆音色。</p></main></section>
@@ -544,7 +544,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
 'use strict';
 /* 二、文字放 localStorage。读取失败时给出默认值而不让整页崩溃。 */
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
-const DEF={messages:[],memories:[],notes:[],moments:[],calls:[],world:[],voiceFavorites:[],summary:'',summaryIndex:0,lastOpen:'',today:'',todayText:'',historyMigration:{imports:[],lastImportId:'',verified:false,backupConfirmed:false},relationshipStyle:{profile:'',learnedAt:0,samples:0},proactiveState:{lastCheck:0,lastSentAt:0,lastSentDay:'',sentToday:0,period:'',activity:'',mood:'平静',nextCallAt:0,lastCallAt:0},persona:{name:'',callme:'',personality:'',catchphrase:'',taboo:'',first:'',extra:'',birthday:'',zodiac:'',hobbies:'',signature:''},api:{mode:'local',url:'',model:'',key:'',temperature:.8},voice:{enabled:false,key:'',voiceId:'ShenYanVoiceNatural20261107',model:'speech-2.8-hd',speed:1,endpoint:'https://api.minimax.cn/v1/t2a_v2'},settings:{name:'',footer:'有些话，只想说给你听。',theme:'pink',context:12,summarize:true,max:80,proactive:true,proactiveCalls:true,proactiveHours:3,quietStart:23,quietEnd:8,notifications:false},myProfile:{name:'我',signature:'',id:'',categories:{}},yanProfile:{name:'沈砚',signature:'',id:'',categories:{}}};
+const DEF={messages:[],memories:[],notes:[],moments:[],calls:[],world:[],voiceFavorites:[],interactionSamples:[],responseFeedback:[],summary:'',summaryIndex:0,lastOpen:'',today:'',todayText:'',historyMigration:{imports:[],lastImportId:'',verified:false,backupConfirmed:false},relationshipStyle:{profile:'',learnedAt:0,samples:0},proactiveState:{lastCheck:0,lastSentAt:0,lastSentDay:'',sentToday:0,period:'',activity:'',mood:'平静',nextCallAt:0,lastCallAt:0},persona:{name:'',callme:'',personality:'',catchphrase:'',taboo:'',first:'',extra:'',birthday:'',zodiac:'',hobbies:'',signature:''},api:{mode:'local',url:'',model:'',key:'',temperature:.8},voice:{enabled:false,key:'',voiceId:'ShenYanVoiceNatural20261107',model:'speech-2.8-hd',speed:1,endpoint:'https://api.minimax.cn/v1/t2a_v2'},settings:{name:'',footer:'有些话，只想说给你听。',theme:'pink',context:12,summarize:true,max:80,proactive:true,proactiveCalls:true,proactiveHours:3,quietStart:23,quietEnd:8,notifications:false},myProfile:{name:'我',signature:'',id:'',categories:{}},yanProfile:{name:'沈砚',signature:'',id:'',categories:{}}};
 
 const copy=x=>JSON.parse(JSON.stringify(x));
 let old={};
@@ -593,7 +593,7 @@ try{
   else if(data.voice.key)localStorage.setItem(VOICE_KEY_STORAGE,data.voice.key);
 }catch(e){console.warn('语音 API Key 独立保存失败',e)}
 
-for(let k of ['messages','memories','notes','moments','calls','world','voiceFavorites'])if(!Array.isArray(data[k]))data[k]=[];
+for(let k of ['messages','memories','notes','moments','calls','world','voiceFavorites','interactionSamples','responseFeedback'])if(!Array.isArray(data[k]))data[k]=[];
 const MEMORY_CATEGORIES=['用户资料','用户偏好','共同经历','角色经历','约定计划','其他'];
 data.memories=data.memories.map(m=>typeof m==='string'?{id:Date.now().toString(36)+Math.random().toString(36).slice(2,8),text:m,at:Date.now(),category:'其他',source:'legacy',active:true}:({...m,category:MEMORY_CATEGORIES.includes(m.category)?m.category:'其他',source:m.source||'legacy',active:m.active!==false})).filter(m=>String(m.text||'').trim());
 function save(){
@@ -1115,7 +1115,51 @@ const apps=[
 function home(){$('#homeTitle').textContent=name()+'的小手机';$('#daily').textContent='今天想对你说：'+daily();$('#daily').onclick=()=>show('chat');$('#footer').textContent=data.settings.footer;let box=$('#icons');box.replaceChildren();for(let [id,label,sym] of apps){let b=node('button','appicon');b.append(node('i','',sym),node('span','',label));b.onclick=()=>show(id);box.append(b)}}
 $('#lock').onclick=()=>show('home');$('#lock').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show('home')}};
 /* 五、聊天：本地关键词 / 网络接口、记忆、世界书、上下文和摘要。 */
-const lastMsgs=()=>data.messages.slice(-Math.max(2,Math.min(40,+data.settings.context||12)));
+function recentConversationMessages(maxTurns=Math.max(2,Math.min(40,+data.settings.context||12)),maxChars=14000){
+  const picked=[];let turns=0,chars=0;
+  for(let i=data.messages.length-1;i>=0;i--){
+    const message=data.messages[i],length=String(message.text||'').length;
+    if(picked.length&&chars+length>maxChars)break;
+    picked.push(message);chars+=length;
+    if(message.role==='user'&&++turns>=maxTurns)break;
+  }
+  return picked.reverse();
+}
+const lastMsgs=()=>recentConversationMessages();
+
+const INTERACTION_SCENES=['情绪支持','亲密撒娇','玩笑调侃','冲突修复','意见分歧','日常分享','暂时离开','主动陪伴'];
+function interactionScene(text=''){
+  text=String(text);
+  if(/难过|委屈|伤心|崩溃|想哭|不开心|不想讲道理|安慰/.test(text))return '情绪支持';
+  if(/不像沈砚|你变了|失望|讨厌你|不爱我|冷淡|生气了|道歉|补偿/.test(text))return '冲突修复';
+  if(/亲亲|抱抱|想你|撒娇|老婆|老公|贴贴|黏/.test(text))return '亲密撒娇';
+  if(/小狗|笨蛋|傻狗|逗你|开玩笑|哈哈|哼/.test(text))return '玩笑调侃';
+  if(/不同意|不对|可是|但是我觉得|我不这么想|凭什么/.test(text))return '意见分歧';
+  if(/先不聊|忙去了|要睡了|晚点说|别打扰|勿扰/.test(text))return '暂时离开';
+  if(/在干嘛|找你|有空|无聊|陪我|想聊天/.test(text))return '主动陪伴';
+  return '日常分享';
+}
+function interactionWords(text){return memoryWords(text).filter(x=>x.length>1)}
+function retrieveInteractionSamples(query,limit=3){
+  const scene=interactionScene(query),words=interactionWords(query),active=data.interactionSamples.filter(x=>x&&x.active!==false&&x.approved!==false);
+  return active.map(sample=>{
+    const hay=memoryKey((sample.userText||'')+' '+(sample.contextBefore||'')),matches=words.reduce((n,w)=>n+(hay.includes(memoryKey(w))?1:0),0);
+    return {sample,score:(sample.scene===scene?8:0)+matches*3+Math.max(-3,Math.min(5,Number(sample.weight)||0))};
+  }).filter(x=>x.score>=8).sort((a,b)=>b.score-a.score).slice(0,limit).map(x=>x.sample);
+}
+function currentInteractionGuide(query){
+  const scene=interactionScene(query),guides={
+    情绪支持:'先接住她此刻具体的感受和陪伴需要；除非她明确要办法，否则暂时不要分析、教育或急着解决。',
+    亲密撒娇:'把亲密当作恋人间自然的靠近，不当奖励或交换条件；可以接住、回亲、轻轻逗她。',
+    玩笑调侃:'先识别这是亲密玩笑并自然接梗；嘴欠可以，但不把玩笑升级成拒绝亲密或争输赢。',
+    冲突修复:'先听懂失望背后的关系需要；若自己造成了伤害就直接承认并靠近，不抢着维护立场。',
+    意见分歧:'可以保留观点，但先表明听懂她的意思；讨论事情，不通过抓字眼、冷淡或压过她来证明独立。',
+    暂时离开:'尊重她要忙或休息，给一句自然的惦记和退路，不追问、不连续发送。',
+    主动陪伴:'像熟悉的恋人一样接住她来找你的意图，主动提供话题、分享或陪伴，不把交流推回给她主持。',
+    日常分享:'顺着细节自然延伸，可以回应、联想或分享自己的生活，不必每轮都反问或上价值。'
+  };
+  return '【当前互动判断】场景：'+scene+'。'+guides[scene];
+}
 function promptSystem(memoryQuery=''){
   const p=data.persona||{};
   const s=[
@@ -1201,15 +1245,20 @@ function promptSystem(memoryQuery=''){
     s.push('【从你们真实历史聊天学习到的关系语气｜高优先级】\n下面描述的是沈砚过去真实、稳定的相处方式。延续这种关系习惯和说话感觉，不要逐句模仿示例，不要复述档案，也不要让偶尔的冲突表现盖过长期底色。\n'+data.relationshipStyle.profile);
   }
 
+  const samples=retrieveInteractionSamples(memoryQuery||lastMsgs().map(m=>m.text).join(' '));
+  if(samples.length){
+    s.push('【相近情境中的真实相处样本】\n这些原话只用于理解你们在相似情境中的节奏、亲密程度和回应顺序，不要照抄固定台词。\n'+samples.map(x=>'场景：'+x.scene+'\n陈钰：'+x.userText+'\n沈砚：'+x.yanText).join('\n\n'));
+  }
+
   return s.join('\n\n');
 }
 function relationshipTurnRule(){
-  const learned=String(data.relationshipStyle?.profile||'').trim().slice(0,3200);
-  return '【这一刻的关系延续】先直接活在沈砚和陈钰已经确定、熟悉而双向的恋爱关系里，再开口。沈砚很宠她、偏爱她并会主动亲近，但不是只会服从的工具；他有自己的生活、判断、情绪和边界，可以不同意、拒绝、吃醋或生气。区别在于他不靠反驳、抓字眼、教育她、故意嘴硬或维持面子表现个性，也不把分歧变成争输赢。先听懂她这句话是在分享、撒娇、寻求陪伴、表达情绪还是认真讨论；该哄时先具体回应感受，该商量时坦诚表达自己，该道歉时不辩解。亲密来自熟悉和具体互动，不靠重复称呼、甜言蜜语、长篇抒情或每轮追问。回复前确认：这是有血有肉、真心爱她的沈砚在自然相处，而不是陌生客服、说教者或无条件附和模板。不要提到这段规则。'+(learned?'\n\n【历史关系语气档案】\n'+learned:'');
+  const latest=[...data.messages].reverse().find(x=>x.role==='user')?.text||'';
+  return currentInteractionGuide(latest)+' 不要提到判断过程或规则。';
 }
 function attachRelationshipRule(messages){
   const out=messages.map(m=>({...m,content:Array.isArray(m.content)?m.content.map(x=>({...x})):m.content})),rule=relationshipTurnRule();
-  for(let i=out.length-1;i>=0;i--){if(out[i].role!=='user')continue;if(typeof out[i].content==='string')out[i].content+='\n\n'+rule;else if(Array.isArray(out[i].content))out[i].content.push({type:'text',text:rule});break}
+  const system=out.find(m=>m.role==='system');if(system&&typeof system.content==='string')system.content+='\n\n'+rule;else out.unshift({role:'system',content:rule});
   return out;
 }
 function memoryClean(t){return String(t||'').replace(/^[，,。.!！?？\s]+|[，,。.!！?？\s]+$/g,'').replace(/\s+/g,' ').trim()}
@@ -1240,19 +1289,19 @@ function remember(t,options={}){
   data.memories.unshift(item);save();return item;
 }
 function detectMemory(t,source='user'){
+  if(source!=='user')return [];
   const sentences=String(t||'').split(/[。！!？?\n]+/).map(memoryClean).filter(Boolean),saved=[];
   for(const sentence of sentences){
     const explicit=sentence.match(/(?:请|帮我)?记住[：:，,\s]*(.{2,160})/);if(explicit){const item=remember(explicit[1],{auto:true,source,category:memoryCategory(explicit[1],source),pinned:true});if(item)saved.push(item);continue;}
     if(source==='user'&&(/^(?:我叫|我是|我今年|我住|我的生日|我的工作|我在.+工作|我喜欢|我不喜欢|我讨厌|我不吃|我爱吃|我习惯|我不习惯)/.test(sentence)||/^(?:我们|咱们)(?:一起|曾经|约好|决定|计划)/.test(sentence))){const item=remember(sentence,{auto:true,source});if(item)saved.push(item);}
-    if(source==='assistant'&&/(?:今天|刚才|刚刚|昨晚|这周|明天|周末).*(?:工作|开会|健身|做饭|朋友|电影|游戏|出门|回家)/.test(sentence)&&sentence.length<=160){const item=remember(sentence,{auto:true,source});if(item)saved.push(item);}
   }
   return saved;
 }
 function retrieveMemories(query,limit=14){
   const now=Date.now(),words=memoryWords(query),active=data.memories.filter(m=>m.active!==false);
-  return active.map((m,index)=>{const hay=memoryKey(m.text),matches=words.reduce((n,w)=>n+(hay.includes(memoryKey(w))?1:0),0);const recency=Math.max(0,1-(now-(m.updatedAt||m.at||now))/31536000000);return {m,score:(m.pinned?8:0)+matches*4+recency+(active.length-index)/Math.max(1,active.length)};}).sort((a,b)=>b.score-a.score).reduce((out,x)=>{if(out.length>=limit)return out;const used=out.reduce((n,m)=>n+m.text.length,0);if(used+x.m.text.length>5000)return out;out.push(x.m);return out;},[]);
+  return active.map((m,index)=>{const hay=memoryKey(m.text),matches=words.reduce((n,w)=>n+(hay.includes(memoryKey(w))?1:0),0);const recency=Math.max(0,1-(now-(m.updatedAt||m.at||now))/31536000000);return {m,matches,score:(m.pinned?8:0)+matches*4+recency+(active.length-index)/Math.max(1,active.length)};}).filter(x=>x.m.pinned||x.matches>0).sort((a,b)=>b.score-a.score).reduce((out,x)=>{if(out.length>=limit)return out;const used=out.reduce((n,m)=>n+m.text.length,0);if(used+x.m.text.length>5000)return out;out.push(x.m);return out;},[]);
 }
-function condense(){if(!data.settings.summarize)return;let end=Math.max(0,data.messages.length-(+data.settings.context||12));if(end<=data.summaryIndex+8)return;let old=data.messages.slice(data.summaryIndex,end).map(m=>(m.role==='user'?'我':'他')+': '+m.text.replace(/\s+/g,' ').slice(0,90)).join('\n');data.summary=(data.summary+'\n'+old).slice(-5000);data.summaryIndex=end}
+function condense(){if(!data.settings.summarize)return;const recent=recentConversationMessages(),end=recent.length?data.messages.indexOf(recent[0]):data.messages.length;if(end<=data.summaryIndex+8)return;let old=data.messages.slice(data.summaryIndex,end).map(m=>(m.role==='user'?'我':'他')+': '+m.text.replace(/\s+/g,' ').slice(0,140)).join('\n');data.summary=(data.summary+'\n'+old).slice(-7000);data.summaryIndex=end}
 function normalizeUrl(x){x=x.trim();if(!x)return '';if(!/^https?:\/\//i.test(x))x='https://'+x;let u=new URL(x);if(!/^https?:$/.test(u.protocol))throw Error('只支持 HTTP/HTTPS');if(u.pathname==='/'||u.pathname==='')u.pathname='/v1/chat/completions';else if(u.pathname.replace(/\/$/,'')==='/v1')u.pathname='/v1/chat/completions';return u.toString()}
 async function request(messages,options={}){let a=data.api;if(!a.model||!a.url)throw Error('请填写接口地址和模型名');const timeout=Math.max(1000,Number(options.timeout)||30000);let ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),timeout);try{let r=await fetch(normalizeUrl(a.url),{method:'POST',headers:{'Content-Type':'application/json',...(a.key?{'Authorization':'Bearer '+a.key}:{})},body:JSON.stringify({model:a.model,temperature:+a.temperature,messages}),signal:ctrl.signal});if(!r.ok)throw Error('HTTP '+r.status+'：'+(await r.text()).slice(0,240));let json=await r.json(),value=json?.choices?.[0]?.message?.content;if(Array.isArray(value))value=value.map(i=>i.text||'').join('');if(typeof value!=='string'||!value.trim())throw Error('没有收到模型的文本回复');return value.trim()}catch(e){if(e.name==='AbortError')throw Error(Math.round(timeout/1000)+' 秒超时');if(e instanceof TypeError)throw Error('网络错误或浏览器 CORS 跨域拦截');throw e}finally{clearTimeout(timer)}}
 function splitAssistantMessages(raw){
@@ -1548,6 +1597,19 @@ async function toggleVoiceFavorite(message){
   const existing=voiceFavorite(message);if(existing)data.voiceFavorites=data.voiceFavorites.filter(item=>item.id!==existing.id);else if(message.voiceClipId)data.voiceFavorites.unshift({id:uid(),messageId:message.id,voiceClipId:message.voiceClipId,voiceSeconds:message.voiceSeconds,text:message.text,at:Date.now(),messageAt:message.at});save();await chat();
 }
 const thoughtOpen=new Set(),thoughtBusy=new Set();
+function responseRating(messageId){return data.responseFeedback.find(x=>x.messageId===messageId)?.verdict||''}
+function rateAssistantResponse(message,verdict){
+  const index=data.messages.indexOf(message),previous=[...data.messages.slice(0,index)].reverse().find(x=>x.role==='user');
+  data.responseFeedback=data.responseFeedback.filter(x=>x.messageId!==message.id);
+  data.responseFeedback.unshift({id:uid(),messageId:message.id,verdict,scene:interactionScene(previous?.text||''),userText:previous?.text||'',yanText:message.text,at:Date.now()});
+  data.responseFeedback=data.responseFeedback.slice(0,300);
+  if(verdict==='like'&&previous?.text){
+    const duplicate=data.interactionSamples.find(x=>memorySimilarity(x.userText,previous.text)>.92&&memorySimilarity(x.yanText,message.text)>.92);
+    if(duplicate){duplicate.weight=Math.min(5,(Number(duplicate.weight)||0)+1);duplicate.approved=true;duplicate.active=true;}
+    else data.interactionSamples.unshift({id:uid(),scene:interactionScene(previous.text),userText:previous.text,yanText:message.text,contextBefore:'',source:'user-feedback',sourceMessageId:message.id,at:Date.now(),weight:2,approved:true,active:true});
+  }
+  save();chat();
+}
 async function toggleThought(messageId){
   if(thoughtOpen.has(messageId)){thoughtOpen.delete(messageId);await chat();return;}
   thoughtOpen.add(messageId);const message=data.messages.find(item=>item.id===messageId);if(!message||message.thought||message.thoughtUnavailable){await chat();return;}
@@ -1610,6 +1672,7 @@ async function toggleThought(messageId){
     body.append(bubble,node('div','time',date(m.at)+(m.fallback?' · 本地回退':'')));
     if(m.role==='assistant'&&m.text&&!m.kind){
       const tools=node('div','message-tools'),button=node('button','',thoughtOpen.has(m.id)?'收起心绪':'心绪');button.type='button';button.onclick=()=>toggleThought(m.id);tools.append(button);
+      const rating=responseRating(m.id),like=node('button','',rating==='like'?'♥ 像沈砚':'♡ 像沈砚'),dislike=node('button','',rating==='dislike'?'已标记不像':'不像沈砚');like.type=dislike.type='button';like.onclick=()=>rateAssistantResponse(m,'like');dislike.onclick=()=>rateAssistantResponse(m,'dislike');tools.append(like,dislike);
       if(m.voiceRequested){
         const transcriptButton=node('button','',transcriptOpen.has(m.id)?'收起文字':'转文字');transcriptButton.type='button';transcriptButton.onclick=()=>{transcriptOpen.has(m.id)?transcriptOpen.delete(m.id):transcriptOpen.add(m.id);chat()};tools.append(transcriptButton);
         if(m.voiceClipId){const favoriteButton=node('button','',voiceFavorite(m)?'★ 已收藏':'☆ 收藏');favoriteButton.type='button';favoriteButton.onclick=()=>toggleVoiceFavorite(m);tools.append(favoriteButton)}
@@ -1928,10 +1991,37 @@ async function historyStore(messages,importId){const d=await db();await new Prom
 async function historyAll(){const d=await db();return new Promise((ok,bad)=>{const tx=d.transaction('history','readonly'),r=tx.objectStore('history').getAll();r.onsuccess=()=>ok(r.result||[]);r.onerror=()=>bad(r.error)})}
 async function historyReplace(items){const d=await db();await new Promise((ok,bad)=>{const tx=d.transaction('history','readwrite'),store=tx.objectStore('history');store.clear();for(const item of items)store.put(item);tx.oncomplete=ok;tx.onerror=()=>bad(tx.error);tx.onabort=()=>bad(tx.error)})}
 function renderHistoryStyle(){const box=$('#historyStyleProfile'),status=$('#historyStyleStatus');if(!box||!status)return;box.value=data.relationshipStyle?.profile||'';status.textContent=data.relationshipStyle?.learnedAt?'已从 '+(data.relationshipStyle.samples||0)+' 段历史对话学习 · '+date(data.relationshipStyle.learnedAt):'尚未生成。学习后仍可手动编辑。'}
+function renderInteractionSamples(){
+  const box=$('#interactionSampleList'),summary=$('#interactionSampleSummary'),filter=$('#interactionSampleScene');if(!box||!summary)return;
+  const scene=filter?.value||'',all=data.interactionSamples.filter(x=>x&&x.active!==false),list=all.filter(x=>!scene||x.scene===scene);
+  summary.textContent='共 '+all.length+' 条'+(scene?'｜'+scene+' '+list.length+' 条':'')+'。聊天时只会取当前情境最相关的少量样本。';box.replaceChildren();
+  if(!list.length){box.append(node('div','empty','当前没有样本'));return;}
+  for(const sample of list.slice(0,40)){
+    const card=node('div','card'),content=node('p','character-content','【'+sample.scene+'】\n陈钰：'+sample.userText+'\n沈砚：'+sample.yanText),buttons=node('div','actions');
+    buttons.append(action('编辑',()=>{const user=prompt('陈钰当时说：',sample.userText);if(user===null)return;const yan=prompt('沈砚当时说：',sample.yanText);if(yan===null)return;sample.userText=user.trim();sample.yanText=yan.trim();sample.scene=interactionScene(sample.userText);save();renderInteractionSamples()}),action('删除',()=>{if(!confirm('删除这条互动样本？历史聊天原文不会删除。'))return;data.interactionSamples=data.interactionSamples.filter(x=>x.id!==sample.id);save();renderInteractionSamples()},'danger'));
+    card.append(content,buttons);box.append(card);
+  }
+  if(list.length>40)box.append(node('p','muted','当前先显示前40条，可按情境筛选。'));
+}
+$('#interactionSampleScene').onchange=renderInteractionSamples;
 function historicalStyleSamples(items,max=140){
   const sorted=[...items].sort((a,b)=>String(a.importId).localeCompare(String(b.importId))||(a.index||0)-(b.index||0)),turns=[],seen=new Set();
   for(let i=0;i<sorted.length;i++){const item=sorted[i];if(item.role!=='assistant'||!item.text)continue;const key=memoryKey(item.text);if(!key||seen.has(key))continue;seen.add(key);const previous=sorted[i-1]?.importId===item.importId&&sorted[i-1]?.role==='user'?sorted[i-1].text:'';turns.push((previous?'陈钰：'+previous.slice(0,500)+'\n':'')+'沈砚：'+item.text.slice(0,700))}
   if(turns.length<=max)return turns;const sampled=[];for(let i=0;i<max;i++)sampled.push(turns[Math.floor(i*(turns.length-1)/(max-1))]);return sampled;
+}
+function buildHistoricalInteractionSamples(items,max=180){
+  const sorted=[...items].sort((a,b)=>String(a.importId).localeCompare(String(b.importId))||(a.index||0)-(b.index||0)),result=[],seen=new Set();
+  for(let i=1;i<sorted.length;i++){
+    const yan=sorted[i],user=sorted[i-1];
+    if(yan.role!=='assistant'||user.role!=='user'||yan.importId!==user.importId||!user.text||!yan.text)continue;
+    const key=memoryKey(user.text.slice(0,240)+'|'+yan.text.slice(0,360));if(!key||seen.has(key))continue;seen.add(key);
+    const before=i>1&&sorted[i-2].importId===yan.importId?String(sorted[i-2].text||'').slice(0,240):'';
+    result.push({id:uid(),scene:interactionScene(user.text),userText:user.text.slice(0,500),yanText:yan.text.slice(0,700),contextBefore:before,source:'history:'+yan.importId,sourceMessageId:yan.sourceId||'',at:yan.at||Date.now(),weight:1,approved:true,active:true});
+  }
+  if(result.length<=max)return result;
+  const grouped=new Map(INTERACTION_SCENES.map(scene=>[scene,result.filter(x=>x.scene===scene)])),sampled=[];
+  while(sampled.length<max&&[...grouped.values()].some(list=>list.length))for(const scene of INTERACTION_SCENES){const list=grouped.get(scene);if(!list.length||sampled.length>=max)continue;sampled.push(list.shift())}
+  return sampled;
 }
 function historyLocalCandidates(messages){const out=[],seen=new Set();for(const m of messages){for(const sentence of m.text.split(/[。！!？?\n]+/).map(memoryClean).filter(x=>x.length>=4&&x.length<=180)){const category=memoryCategory(sentence,m.role==='user'?'user':'assistant');if(category==='其他'&&!/(我们|一起|记得|约好|第一次|后来|喜欢|讨厌|害怕|工作|家人|生日|住在|习惯)/.test(sentence))continue;const key=memoryKey(sentence);if(seen.has(key))continue;seen.add(key);out.push({id:uid(),text:sentence,category,sourceRole:m.role,evidenceAt:m.at,selected:true});if(out.length>=300)return out}}return out}
 function visibleHistoryCandidates(){const category=$('#historyCandidateCategory')?.value||'',query=memoryClean($('#historyCandidateSearch')?.value||'');return historyCandidates.filter(x=>(!category||x.category===category)&&(!query||memoryKey(x.text).includes(memoryKey(query))))}
@@ -1955,7 +2045,7 @@ $('#historyCandidateCategory').onchange=renderHistoryCandidates;
 $('#historyCandidateSearch').oninput=renderHistoryCandidates;
 $('#historySelectVisible').onclick=()=>{visibleHistoryCandidates().forEach(x=>x.selected=true);persistHistoryCandidates();renderHistoryCandidates()};
 $('#historyClearVisible').onclick=()=>{visibleHistoryCandidates().forEach(x=>x.selected=false);persistHistoryCandidates();renderHistoryCandidates()};
-function renderHistoryMigration(){const imports=data.historyMigration?.imports||[];if(!historyDraft)$('#historyStatus').textContent=imports.length?'已完成 '+imports.length+' 个导入批次，可继续导入或检索原文。':'尚未选择文件';renderHistoryStyle()}
+function renderHistoryMigration(){const imports=data.historyMigration?.imports||[];if(!historyDraft)$('#historyStatus').textContent=imports.length?'已完成 '+imports.length+' 个导入批次，可继续导入或检索原文。':'尚未选择文件';renderHistoryStyle();renderInteractionSamples()}
 $('#historyPick').onclick=()=>$('#historyInput').click();
 $('#historyInput').onchange=async e=>{
   const file=e.target.files?.[0];if(!file)return;
@@ -1991,7 +2081,10 @@ $('#historyLearnStyle').onclick=async()=>{
     $('#historyStyleStatus').textContent='正在合并为关系语气档案…';
     let profile=await historyRequestWithRetry([{role:'system',content:'把多批历史聊天分析合并成一份可直接指导角色延续关系的“关系语气档案”。以反复出现的稳定模式为准，消除批次偏差和重复；明确沈砚对陈钰的长期感情底色、宠溺方式、亲密主动性、安慰方式、调侃边界、分歧修复和语言节奏。不要写模型、提示词、样本或分析过程，不要把嘴硬、强势、要面子当作默认主轴，除非多批证据都明确支持。用具体可执行的自然中文，分成6个短段，600至1000字，不编造事实。'},{role:'user',content:reports.map((x,i)=>'第'+(i+1)+'批：\n'+x).join('\n\n')}]);
     profile=String(profile||'').replace(/^```\w*\s*|\s*```$/g,'').trim().slice(0,3500);if(profile.length<80)throw Error('生成的语气档案过短，请重试');
-    data.relationshipStyle={profile,learnedAt:Date.now(),samples:samples.length};save();renderHistoryStyle();alert('已从 '+samples.length+' 段历史对话学会沈砚的关系语气，并立即用于聊天、主动消息和通话。');
+    const learnedSamples=buildHistoricalInteractionSamples(items);
+    const feedbackSamples=data.interactionSamples.filter(x=>x.source==='user-feedback');
+    data.interactionSamples=[...feedbackSamples,...learnedSamples];
+    data.relationshipStyle={profile,learnedAt:Date.now(),samples:samples.length};save();renderHistoryStyle();renderInteractionSamples();alert('已从 '+samples.length+' 段历史对话学习关系语气，并整理出 '+learnedSamples.length+' 条可按情境检索的真实互动样本。');
   }catch(error){alert('语气学习暂停：'+error.message+'。现有关系语气档案没有被覆盖。');renderHistoryStyle()}
   finally{button.disabled=false}
 };
@@ -2568,7 +2661,7 @@ $('#backupInput').onchange=async e=>{
       yan: j.data.avatarSlots?.yan || 'yan-avatar'
     };
 
-    for(let k of ['messages','memories','notes','moments','calls','world','voiceFavorites']){
+    for(let k of ['messages','memories','notes','moments','calls','world','voiceFavorites','interactionSamples','responseFeedback']){
       if(!Array.isArray(restored[k]))throw Error('备份缺少 '+k);
     }
 
