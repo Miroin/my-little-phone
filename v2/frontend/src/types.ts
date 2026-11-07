@@ -28,7 +28,12 @@ export interface CallRecord {
 
 export interface Memory {
   id: string;
-  category: 'persona' | 'relationship' | 'user' | 'event' | 'feedback';
-  text: string;
+  layer: 'personality' | 'relationship' | 'user' | 'event' | 'feeling' | 'plan' | 'sample';
+  content: string;
+  summary: string;
+  status: 'candidate' | 'active' | 'archived' | 'superseded' | 'deleted';
+  importance: number;
+  confidence: number;
+  tags: string[];
   createdAt: string;
 }
