@@ -1,35 +1,25 @@
-import {FormEvent,useEffect,useState} from 'react';
+import {FormEvent,useEffect,useMemo,useState} from 'react';
 import {loadMessages,sendMessage} from './api';
 import type {Message} from './types';
 
-type Page='chat'|'calls'|'memories'|'settings';
+type Page='home'|'chat'|'calls'|'memories'|'profile'|'settings';
+const pageTitle:Record<Page,string>={home:'沈砚的小手机',chat:'沈砚',calls:'语音通话',memories:'我们的记忆',profile:'角色资料',settings:'设置'};
 
 export function App(){
-  const [page,setPage]=useState<Page>('chat');
-  const [messages,setMessages]=useState<Message[]>([]);
-  const [input,setInput]=useState('');
-  const [busy,setBusy]=useState(false);
-  const [error,setError]=useState('');
-
-  useEffect(()=>{loadMessages().then(setMessages).catch(()=>setError('后端尚未启动，界面可以继续预览。'));},[]);
-
-  async function submit(event:FormEvent){
-    event.preventDefault();const text=input.trim();if(!text||busy)return;setBusy(true);setError('');setInput('');
-    try{const result=await sendMessage(text);setMessages(current=>[...current,result.user,result.assistant]);}
-    catch(reason){setInput(text);setError(reason instanceof Error?reason.message:'发送失败');}
-    finally{setBusy(false);}
-  }
+  const [page,setPage]=useState<Page>('home'),[messages,setMessages]=useState<Message[]>([]),[input,setInput]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const time=useMemo(()=>new Intl.DateTimeFormat('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date()),[]),date=useMemo(()=>new Intl.DateTimeFormat('zh-CN',{month:'long',day:'numeric',weekday:'long'}).format(new Date()),[]);
+  useEffect(()=>{loadMessages().then(setMessages).catch(()=>setError('预览模式 · 后端接通后会恢复完整聊天'));},[]);
+  async function submit(event:FormEvent){event.preventDefault();const text=input.trim();if(!text||busy)return;setBusy(true);setError('');setInput('');try{const result=await sendMessage(text);setMessages(current=>[...current,result.user,result.assistant]);}catch(reason){setInput(text);setError(reason instanceof Error?reason.message:'发送失败');}finally{setBusy(false);}}
+  const nav=(target:Page)=>setPage(target);
 
   return <main className="phone-shell">
-    <header><div><strong>沈砚</strong><small>关系与记忆连续</small></div><span className="status">● 在线</span></header>
-    {page==='chat'&&<section className="chat-page">
-      <div className="messages">{messages.length?messages.map(message=><article key={message.id} className={message.speaker==='user'?'mine':''}>{message.text}</article>):<p className="empty">聊天、通话和记忆会从同一个后端读取。</p>}</div>
-      {error&&<p className="error">{error}</p>}
-      <form onSubmit={submit}><input value={input} onChange={event=>setInput(event.target.value)} placeholder="说点什么…"/><button disabled={busy}>{busy?'回复中':'发送'}</button></form>
-    </section>}
-    {page==='calls'&&<section className="placeholder"><h2>实时通话</h2><p>下一阶段接入流式语音、打断、来电记录和通话记忆。</p></section>}
-    {page==='memories'&&<section className="placeholder"><h2>多层记忆</h2><p>人格、关系、用户、事件与反馈分层保存并按当前话题检索。</p></section>}
-    {page==='settings'&&<section className="placeholder"><h2>设置</h2><p>模型与语音密钥只保存在服务端。</p></section>}
-    <nav>{(['chat','calls','memories','settings'] as Page[]).map(item=><button key={item} className={page===item?'active':''} onClick={()=>setPage(item)}>{({chat:'聊天',calls:'通话',memories:'记忆',settings:'设置'} as const)[item]}</button>)}</nav>
+    <header className={page==='home'?'home-head':''}>{page!=='home'&&<button className="back" onClick={()=>nav('home')}>‹</button>}<div className="identity"><span className="mini-avatar">砚</span><div><strong>{pageTitle[page]}</strong><small>{page==='chat'?'在线 · 正在陪你':'关系与记忆连续'}</small></div></div>{page==='chat'?<button className="head-action" onClick={()=>nav('calls')}>☎</button>:<span className="status">● 在线</span>}</header>
+    {page==='home'&&<section className="home-page"><div className="time-card"><div><small>{date}</small><b>{time}</b></div><div className="weather">☁<span>陪伴中</span></div></div><button className="presence-card" onClick={()=>nav('chat')}><span className="large-avatar">砚</span><span><b>沈砚</b><small>刚忙完手上的事，来看看你。</small></span><i>›</i></button><p className="section-title">今天也在一起</p><div className="app-grid"><button onClick={()=>nav('chat')}><i>✉</i><span>聊天</span></button><button onClick={()=>nav('calls')}><i>☎</i><span>通话</span></button><button onClick={()=>nav('memories')}><i>♡</i><span>记忆</span></button><button onClick={()=>nav('profile')}><i>♙</i><span>角色资料</span></button><button><i>⌂</i><span>我们的小家</span></button><button><i>♫</i><span>一起听歌</span></button><button><i>▧</i><span>回忆相册</span></button><button onClick={()=>nav('settings')}><i>⚙</i><span>设置</span></button></div><div className="today-card"><span>今日陪伴</span><p>“没什么特别的事，就是想来找你待一会儿。”</p><small>主动消息、日程和生活状态会在后端接通后显示在这里。</small></div></section>}
+    {page==='chat'&&<section className="chat-page"><div className="messages">{messages.length?messages.map(message=><article key={message.id} className={message.speaker==='user'?'mine':''}>{message.text}</article>):<div className="chat-empty"><span className="large-avatar">砚</span><b>聊天会接着旧版继续</b><p>历史对话、电话和记忆迁移完成后，不需要重新认识。</p><div className="chips"><button onClick={()=>setInput('你在干嘛？')}>你在干嘛？</button><button onClick={()=>setInput('来陪我一会儿')}>陪陪我</button></div></div>}</div>{error&&<p className="error">{error}</p>}<form onSubmit={submit}><button type="button" className="round">＋</button><input value={input} onChange={event=>setInput(event.target.value)} placeholder="说点什么…"/><button disabled={busy}>{busy?'回复中':'发送'}</button></form></section>}
+    {page==='calls'&&<section className="feature-page"><span className="feature-icon">☎</span><h2>想听听你的声音</h2><p>这里会接入可打断的实时语音、主动来电、通话时长和挂断后的对话记录。</p><button className="primary">开始通话</button><div className="soft-card"><b>最近通话</b><small>通话原文会和聊天使用同一段记忆。</small></div></section>}
+    {page==='memories'&&<section className="feature-page"><span className="feature-icon">♡</span><h2>我们的记忆</h2><p>人格、关系、用户、事件和反馈会分开保存，只在相关时取出来。</p><div className="memory-grid"><div><b>人格</b><span>沈砚是谁</span></div><div><b>关系</b><span>我们如何相处</span></div><div><b>事件</b><span>共同经历</span></div><div><b>反馈</b><span>什么像他</span></div></div></section>}
+    {page==='profile'&&<section className="feature-page"><span className="large-avatar">砚</span><h2>沈砚</h2><p>恋人 · 26岁 · 正在和你一起生活</p><div className="soft-card left"><b>人物档案</b><small>固定人设、关系档案、语言习惯和生活安排会在这里分层管理。</small></div><div className="soft-card left"><b>陈钰的资料</b><small>他记住的偏好和习惯可以查看、修改和删除。</small></div></section>}
+    {page==='settings'&&<section className="feature-page"><h2>设置</h2><div className="setting-list"><button>模型与接口 <span>服务端 ›</span></button><button>语音与通话 <span>MiniMax ›</span></button><button>主动陪伴 <span>开启 ›</span></button><button>数据迁移 <span>待导入 ›</span></button><button>主题管理 <span>›</span></button></div></section>}
+    <nav>{(['home','chat','calls','profile'] as const).map(item=><button key={item} className={page===item?'active':''} onClick={()=>nav(item)}><i>{({home:'⌂',chat:'✉',calls:'☎',profile:'♙'} as const)[item]}</i>{({home:'主页',chat:'聊天',calls:'通话',profile:'资料'} as const)[item]}</button>)}</nav>
   </main>;
 }
