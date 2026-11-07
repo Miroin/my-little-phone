@@ -64,6 +64,42 @@ button,input,textarea,select{max-width:100%}
   position:relative;overflow:hidden;background:var(--bg);
   box-shadow:var(--shadow-card)
 }
+.phone::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:0;opacity:0;transition:opacity var(--transition-normal)}
+.screen,.incoming-call,.call-summary,.preview{position:relative;z-index:1}
+[data-theme="luxury"] body{font-family:"Songti SC","STSong","Noto Serif SC",system-ui,sans-serif;background:#817a78}
+[data-theme="luxury"] .phone{background:
+  radial-gradient(circle at 85% 8%,rgba(255,248,225,.24),transparent 28%),
+  radial-gradient(circle at 10% 88%,rgba(255,255,255,.16),transparent 35%),
+  linear-gradient(155deg,#aaa3a1 0%,#8f8989 46%,#a9a4a2 100%)}
+[data-theme="luxury"] .phone::before{opacity:.68;background:
+  linear-gradient(120deg,transparent 0 12%,rgba(255,248,235,.16) 13%,transparent 18% 78%,rgba(255,248,235,.13) 84%,transparent 90%),
+  repeating-linear-gradient(0deg,rgba(255,255,255,.018) 0 1px,transparent 1px 4px)}
+[data-theme="luxury"] .head,[data-theme="luxury"] .composer,[data-theme="luxury"] #stickerPanel{background:rgba(149,141,141,.64);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px)}
+[data-theme="luxury"] .card,[data-theme="luxury"] .appicon i,[data-theme="luxury"] .bubble{background:linear-gradient(145deg,rgba(255,250,242,.17),rgba(116,108,110,.18));backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-color:rgba(255,239,210,.38)}
+[data-theme="luxury"] .mine .bubble{background:linear-gradient(145deg,rgba(238,219,207,.34),rgba(156,139,140,.24))}
+[data-theme="luxury"] .card,[data-theme="luxury"] .appicon i{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 10px 32px rgba(73,63,64,.18),0 0 16px rgba(255,237,205,.1)}
+[data-theme="luxury"] .head b,[data-theme="luxury"] h2,[data-theme="luxury"] h3{letter-spacing:.12em;font-weight:500}
+[data-theme="luxury"] .btn{background:linear-gradient(145deg,#c8b6aa,#8f7d7d);color:#fff8eb}
+[data-theme="luxury"] .btn.alt,[data-theme="luxury"] .back{background:rgba(246,235,221,.14);color:#fff4df;border:1px solid rgba(255,239,210,.28)}
+[data-theme="luxury"] .appicon i{color:#fff0d5;border-radius:28px}
+[data-theme="luxury"] #lock,[data-theme="luxury"] #home{background:transparent}
+[data-theme="y2k"] body{background:#0a143f}
+[data-theme="y2k"] .phone{background:
+  radial-gradient(circle at 12% 8%,rgba(94,111,255,.55),transparent 34%),
+  radial-gradient(circle at 86% 76%,rgba(204,115,255,.34),transparent 35%),
+  linear-gradient(160deg,#17265f 0%,#233b8a 46%,#17245b 100%)}
+[data-theme="y2k"] .phone::before{opacity:.72;background:
+  repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 4px),
+  radial-gradient(circle at 20% 24%,rgba(255,255,255,.55) 0 1px,transparent 2px),
+  radial-gradient(circle at 82% 12%,rgba(255,255,255,.5) 0 1px,transparent 2px);background-size:auto,83px 83px,121px 121px}
+[data-theme="y2k"] .head,[data-theme="y2k"] .composer,[data-theme="y2k"] #stickerPanel{background:rgba(46,65,145,.62);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-color:rgba(158,228,255,.54)}
+[data-theme="y2k"] .card,[data-theme="y2k"] .appicon i,[data-theme="y2k"] .bubble{background:linear-gradient(145deg,rgba(208,210,255,.33),rgba(88,93,194,.32));backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-color:rgba(173,239,255,.72);box-shadow:inset 0 0 15px rgba(255,255,255,.14),0 0 14px rgba(111,210,255,.26),0 0 24px rgba(201,124,255,.18)}
+[data-theme="y2k"] .mine .bubble{background:linear-gradient(145deg,rgba(78,155,255,.78),rgba(60,83,213,.72));color:white}
+[data-theme="y2k"] .btn{background:linear-gradient(135deg,#8be7ff,#7d70ff 55%,#db82ff);box-shadow:0 0 14px rgba(139,223,255,.4)}
+[data-theme="y2k"] .btn.alt,[data-theme="y2k"] .back{background:rgba(157,157,255,.25);color:white;border:1px solid rgba(171,234,255,.48)}
+[data-theme="y2k"] .appicon i{border-radius:50%;color:white}
+[data-theme="y2k"] #lock,[data-theme="y2k"] #home{background:transparent}
+#beauty [data-theme][aria-pressed="true"]{outline:2px solid color-mix(in srgb,var(--main) 70%,white);outline-offset:2px;box-shadow:0 0 0 4px color-mix(in srgb,var(--main) 16%,transparent)}
 .screen{display:none;height:100%;flex-direction:column;min-height:0}
 .screen.active{display:flex}
 
@@ -473,6 +509,8 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
   <h3>🌸 主题风格</h3>
   <p class="muted">选择整套主题，一键改变小手机的整体外观。</p>
   <div class="actions">
+    <button type="button" class="btn" data-theme="luxury">✦ 雾金高级感</button>
+    <button type="button" class="btn alt" data-theme="y2k">💿 蓝紫 Y2K</button>
     <button type="button" class="btn" data-theme="pink">🌸 粉紫梦幻</button>
     <button type="button" class="btn alt" data-theme="lavender">💜 薰衣草紫</button>
     <button type="button" class="btn alt" data-theme="cream">🍰 奶油色</button>
@@ -530,7 +568,7 @@ p{white-space:pre-wrap;overflow-wrap:anywhere}
 
     <div class="card">
       <h3>📦 主题管理</h3>
-      <p class="muted">后续支持主题包导入、导出、预览和恢复默认。</p>
+      <p class="muted">高级感与 Y2K 是网站内置主题包。切换只改变外观，不覆盖聊天、记忆、角色资料、世界书、相册、语音或密钥。</p>
     </div>
   </main>
 </section>
@@ -974,9 +1012,11 @@ async function refresh(){
 }
   function objectUrl(item){if(!urls[item.id])urls[item.id]=URL.createObjectURL(item.blob);return urls[item.id]};function forgetUrls(){for(let u of Object.values(urls))URL.revokeObjectURL(u);urls={}}
 /* 四、桌面、主题和每天固定的一句话。 */
-const colors={pink:['#f9e5f0','#9675b5','#514b56','#4e4a50','#fff9fc','#eddaee','#dbcede','#8b8290','#e8d9f4','#fff','#ab5365'],lavender:['#efe7fc','#8065b1','#4b455a','#54445c','#fcf9ff','#ddd0f2','#d6c6e8','#887c99','#e3d8fa','#fff','#aa546a'],cream:['#fff0e3','#b38799','#605458','#595054','#fffaf5','#f5e0d2','#e9d2c9','#98858a','#f3d9dc','#fff','#a95667'],dark:['#272334','#d0b4ef','#eee5f4','#74637b','#383144','#4c405c','#5b4e68','#b0a2bc','#675578','#453b50','#ad506b']};
+const colors={luxury:['#98918f','#d8c2ad','#fff7e8','#e7d3c0','rgba(150,142,142,.7)','rgba(235,220,207,.16)','rgba(255,239,210,.36)','#d8ccc2','rgba(208,188,178,.34)','rgba(255,250,242,.17)','#a86672'],y2k:['#17265f','#a895ff','#f7f5ff','#bde9ff','rgba(52,68,139,.72)','rgba(116,110,214,.28)','rgba(167,231,255,.58)','#c5c7ec','rgba(57,117,238,.78)','rgba(199,201,255,.32)','#ef719d'],pink:['#f9e5f0','#9675b5','#514b56','#4e4a50','#fff9fc','#eddaee','#dbcede','#8b8290','#e8d9f4','#fff','#ab5365'],lavender:['#efe7fc','#8065b1','#4b455a','#54445c','#fcf9ff','#ddd0f2','#d6c6e8','#887c99','#e3d8fa','#fff','#aa546a'],cream:['#fff0e3','#b38799','#605458','#595054','#fffaf5','#f5e0d2','#e9d2c9','#98858a','#f3d9dc','#fff','#a95667'],dark:['#272334','#d0b4ef','#eee5f4','#74637b','#383144','#4c405c','#5b4e68','#b0a2bc','#675578','#453b50','#ad506b']};
 function theme(){
   let v=colors[data.settings.theme]||colors.pink;
+
+  document.documentElement.dataset.theme=data.settings.theme||'pink';
 
   ['bg','main','ink','accent','card','soft','line','muted','mine','other','danger']
     .forEach((key,i)=>document.documentElement.style.setProperty('--'+key,v[i]));
@@ -994,11 +1034,16 @@ function applyBeautyTheme(key){
   data.settings.customColors={};
   save();
   theme();
+  markActiveBeautyTheme();
+}
+function markActiveBeautyTheme(){
+  $$('#beauty [data-theme]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.theme===data.settings.theme)));
 }
 function beauty(){
   $$('#beauty [data-theme]').forEach(b=>{
     b.onclick=()=>applyBeautyTheme(b.dataset.theme);
   });
+  markActiveBeautyTheme();
 
   setupLockWallpaper();
   loadLockWallpaper();
