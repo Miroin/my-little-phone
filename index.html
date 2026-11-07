@@ -1324,6 +1324,15 @@ function currentInteractionGuide(query){
   if(/难过|委屈|伤心|不想讲道理|只想.*陪/.test(query))needs.push('这一轮让她感到你确实留在这里陪她，先不处理问题。');
   return '【本轮互动决策｜优先于一般性格描述】场景：'+scene+'。'+guides[scene]+'\n她此刻更可能需要：'+decision.intent+'。\n回应顺序：'+decision.priority.join(' → ')+'。\n这轮避免：'+decision.avoid.join('；')+'。调侃程度：'+decision.teasing+'。先在心里完成判断，再直接说人话；不要输出分析过程。'+(needs.length?'\n'+needs.join('\n'):'')+rejectedResponseGuide(query);
 }
+function recentCallContext(limit=2,maxChars=5000){
+  const records=(data.calls||[]).filter(call=>call&&call.status==='answered'&&Array.isArray(call.session)&&call.session.length).slice(0,limit).reverse(),parts=[];let chars=0;
+  for(const call of records){
+    const lines=call.session.map(line=>(line.role==='user'?'陈钰：':name()+'：')+String(line.text||'').trim()).filter(line=>!/[：:]$/.test(line));
+    const block='['+(call.direction==='incoming'?name()+'主动来电':'陈钰拨出')+' · '+format(call.seconds)+' · '+date(call.at)+']\n'+lines.join('\n');
+    if(parts.length&&chars+block.length>maxChars)continue;parts.push(block);chars+=block.length;
+  }
+  return parts.join('\n\n');
+}
 function promptSystem(memoryQuery=''){
   const p=data.persona||{};
   const s=[
@@ -1403,6 +1412,11 @@ function promptSystem(memoryQuery=''){
       '【触发的世界书】\n'+
       active.map(w=>'['+w.title+'] '+w.text).join('\n')
     );
+  }
+
+  const callContext=recentCallContext();
+  if(callContext){
+    s.push('【最近语音通话原文｜与文字聊天属于同一段关系】\n下面按真实说话身份保存。继续聊天时自然记得电话里已经说过的事，不要假装没发生，也不要无缘无故复述整段通话。\n'+callContext);
   }
 
   if(data.relationshipStyle?.profile){
@@ -1811,7 +1825,7 @@ async function toggleThought(messageId){
     let bubble=node('div','bubble');
 
     if(m.kind==='call'){
-      const record=data.calls.find(x=>x.id===m.callId),title=node('b','',record&&record.direction==='incoming'?'☎ 已接来电':'☎ 语音通话'),detail=node('span','',record?(format(record.seconds)+' · '+record.turns+' 轮\n点击查看通话内容'):'通话记录');
+      const record=data.calls.find(x=>x.id===m.callId),title=node('b','',record?'☎ '+callStatusText(record):'☎ 通话记录'),detail=node('span','',record?((record.seconds?format(record.seconds):'00:00')+(record.turns?' · '+record.turns+' 轮':'')+(record.transcript?'\n点击查看通话内容':'')):'通话记录');
       bubble.classList.add('call-event');bubble.append(title,detail);bubble.onclick=()=>openCallSummary(record||{at:m.at,status:'answered',direction:'incoming',transcript:m.text});
     }else if(m.stickerId){
       const sticker=media.find(x=>x.id===m.stickerId);
@@ -2090,6 +2104,12 @@ function renderCallDialogue(){const box=$('#callDialogue');if(!box)return;box.re
 function renderCallControls(){const active=Boolean(callTimer);$('#connect').disabled=active;$('#hangup').disabled=!active;$('#callInput').disabled=!active||callBusy;$('#callSend').disabled=!active||callBusy;$('#callMic').disabled=!active||callMuted||callListening;$('#callMute').textContent='静音：'+(callMuted?'开':'关');$('#callMute').classList.toggle('active',callMuted);$('#callSpeaker').textContent='扬声器：'+(callSpeaker?'开':'关');$('#callSpeaker').classList.toggle('active',callSpeaker);$('#callHandsFree').disabled=!active;$('#callHandsFree').textContent='自动接话：'+(callHandsFree?'开':'关');$('#callHandsFree').classList.toggle('active',callHandsFree)}
 function callStatusText(c){return c.status==='declined'?'已拒接':c.status==='missed'?'未接来电':(c.direction==='incoming'?'已接来电':'已拨电话')}
 function callTranscriptText(session=[]){return session.map(x=>(x.role==='user'?'陈钰：':name()+'：')+x.text).join('\n')}
+function storeCallRecord(record,{chatEvent=true}={}){
+  data.calls.unshift(record);
+  if(chatEvent)data.messages.push({id:uid(),role:'assistant',kind:'call',callId:record.id,text:'通话事件：'+callStatusText(record)+(record.seconds?'，时长 '+format(record.seconds):''),at:record.endedAt||Date.now()});
+  if(record.status==='answered')for(const line of record.session||[])if(line.role==='user')detectMemory(line.text,'user');
+  save();return record;
+}
 function openCallSummary(record,ended=false){if(!record)return;$('#callSummaryTitle').textContent=ended?'通话结束':'通话记录';$('#callSummaryMeta').textContent=date(record.at)+' · '+callStatusText(record)+(record.seconds?' · '+format(record.seconds):'')+(record.turns?' · '+record.turns+' 轮':'');$('#callSummaryTranscript').textContent=record.transcript||'这通电话没有留下文字对话。';$('#callSummary').classList.add('open')}
 function calls(){$('#callAvatar').replaceChildren();if(yanAvatarUrl){const img=document.createElement('img');img.src=yanAvatarUrl;img.alt='沈砚的头像';$('#callAvatar').append(img)}else $('#callAvatar').textContent=avatar();$('#callName').textContent=name();renderCallDialogue();renderCallControls();let box=$('#callList');box.replaceChildren();if(!data.calls.length)box.append(node('div','empty','暂无通话记录'));for(let c of data.calls){const card=node('div','card',date(c.at)+'　'+callStatusText(c)+(c.seconds?'　'+format(c.seconds):'')+(c.turns?'　· '+c.turns+' 轮':'')+(c.transcript?'\n点击查看通话内容':''));if(c.transcript){card.style.cursor='pointer';card.onclick=()=>openCallSummary(c)}box.append(card)}}
 async function playCallVoice(text){if(!data.voice?.enabled||!data.voice?.key||!callSpeaker)return;const result=await requestMiniMaxVoice(text);await stopVoice(false);voiceObjectUrl=URL.createObjectURL(result.blob);voiceAudio.src=voiceObjectUrl;voiceAudio.volume=callSpeaker?1:.35;await voiceAudio.play();await new Promise((resolve,reject)=>{const done=()=>{voiceAudio.onended=voiceAudio.onpause=voiceAudio.onerror=null;resolve()};voiceAudio.onended=voiceAudio.onpause=done;voiceAudio.onerror=()=>{voiceAudio.onended=voiceAudio.onpause=voiceAudio.onerror=null;reject(Error('语音播放失败'))}})}
@@ -2117,7 +2137,7 @@ async function callRespond(context){
 async function sendCallInput(){const input=$('#callInput'),text=input.value.trim();if(!text||!callTimer||callBusy)return;input.value='';callSession.push({role:'user',text,at:Date.now()});renderCallDialogue();await callRespond(text)}
 async function startVoiceCall(incoming=false){if(callTimer)return false;if(!data.voice?.enabled||!data.voice?.key){alert('请先在“接口与模型”开启 MiniMax 语音并填写密钥。');return false}callDirection=incoming?'incoming':'outgoing';callStart=Date.now();callSession=[];callHandsFree=Boolean(window.SpeechRecognition||window.webkitSpeechRecognition);stopCallListening();$('#callStatus').textContent=incoming?'已接听':'正在接通…';$('#callClock').textContent='00:00';callTimer=setInterval(()=>$('#callClock').textContent=format((Date.now()-callStart)/1000),300);renderCallControls();await callRespond(incoming?'你刚主动给陈钰打来电话，她已经接听。自然说明为什么想打给她并开始聊天。':'电话刚接通，主动自然地和用户打招呼。');return true}
 $('#connect').onclick=()=>startVoiceCall(false);
-$('#hangup').onclick=async()=>{if(!callTimer)return;clearInterval(callTimer);callTimer=null;callHandsFree=false;stopCallListening();await stopVoice(false);const n=Math.floor((Date.now()-callStart)/1000),record={id:uid(),at:callStart,seconds:n,turns:callSession.filter(x=>x.role==='user').length,direction:callDirection,status:'answered',transcript:callTranscriptText(callSession),session:copy(callSession)};data.calls.unshift(record);const chatMemory='刚刚进行了一次'+(callDirection==='incoming'?name()+'主动打来的':'打给'+name()+'的')+'语音通话，持续 '+format(n)+'。\n'+record.transcript;data.messages.push({id:uid(),role:'assistant',kind:'call',callId:record.id,text:chatMemory,at:Date.now()});condense();save();$('#callClock').textContent=format(n);$('#callStatus').textContent='通话结束 · '+format(n);renderCallControls();calls();await chat();openCallSummary(record,true)};
+$('#hangup').onclick=async()=>{if(!callTimer)return;clearInterval(callTimer);callTimer=null;callHandsFree=false;stopCallListening();await stopVoice(false);const n=Math.floor((Date.now()-callStart)/1000),record={id:uid(),at:callStart,endedAt:Date.now(),seconds:n,turns:callSession.filter(x=>x.role==='user').length,direction:callDirection,status:'answered',transcript:callTranscriptText(callSession),session:copy(callSession)};storeCallRecord(record);condense();$('#callClock').textContent=format(n);$('#callStatus').textContent='通话结束 · '+format(n);renderCallControls();calls();await chat();openCallSummary(record,true)};
 $('#callSend').onclick=sendCallInput;$('#callInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();sendCallInput()}};$('#callMute').onclick=()=>{callMuted=!callMuted;if(callMuted)stopCallListening();else if(callHandsFree)setTimeout(()=>startCallListening(false),300);renderCallControls()};$('#callSpeaker').onclick=()=>{callSpeaker=!callSpeaker;if(!callSpeaker)voiceAudio.pause();renderCallControls()};
 $('#callHandsFree').onclick=()=>{callHandsFree=!callHandsFree;if(callHandsFree){if(!startCallListening(true))callHandsFree=false}else stopCallListening();renderCallControls()};
 $('#callMic').onclick=async()=>{if(callBusy){callTurnToken++;callBusy=false;await stopVoice(false);$('#callStatus').textContent='已打断，现在听你说';renderCallControls()}startCallListening(true)};
@@ -2128,8 +2148,8 @@ function ringOnce(){if(!ringContext||ringContext.state!=='running')return;const 
 function startRingtone(){stopRingtone();ringOnce();ringTimer=setInterval(ringOnce,2200)}
 function stopRingtone(){if(ringTimer){clearInterval(ringTimer);ringTimer=null}if(navigator.vibrate)navigator.vibrate(0)}
 function closeIncomingCall(){stopRingtone();incomingPending=null;$('#incomingCall').classList.remove('open')}
-function showIncomingCall(reason='想听听你的声音',force=false){if(callTimer||incomingPending||(!force&&(!data.settings.proactiveCalls||document.hidden)))return false;const token=uid();incomingPending={id:token,at:Date.now(),reason};$('#incomingName').textContent=name();$('#incomingReason').textContent=reason;$('#incomingAvatar').replaceChildren();if(yanAvatarUrl){const img=document.createElement('img');img.src=yanAvatarUrl;img.alt='沈砚的头像';$('#incomingAvatar').append(img)}else $('#incomingAvatar').textContent=avatar();$('#incomingCall').classList.add('open');startRingtone();if(navigator.vibrate)navigator.vibrate([350,180,350,180,600]);setTimeout(()=>{if(incomingPending?.id!==token)return;data.calls.unshift({id:uid(),at:incomingPending.at,seconds:0,turns:0,direction:'incoming',status:'missed'});data.proactiveState.lastCallAt=Date.now();save();closeIncomingCall()},45000);return true}
-$('#declineIncoming').onclick=()=>{if(!incomingPending)return;data.calls.unshift({id:uid(),at:incomingPending.at,seconds:0,turns:0,direction:'incoming',status:'declined'});data.proactiveState.lastCallAt=Date.now();save();closeIncomingCall()};
+function showIncomingCall(reason='想听听你的声音',force=false){if(callTimer||incomingPending||(!force&&(!data.settings.proactiveCalls||document.hidden)))return false;const token=uid();incomingPending={id:token,at:Date.now(),reason};$('#incomingName').textContent=name();$('#incomingReason').textContent=reason;$('#incomingAvatar').replaceChildren();if(yanAvatarUrl){const img=document.createElement('img');img.src=yanAvatarUrl;img.alt='沈砚的头像';$('#incomingAvatar').append(img)}else $('#incomingAvatar').textContent=avatar();$('#incomingCall').classList.add('open');startRingtone();if(navigator.vibrate)navigator.vibrate([350,180,350,180,600]);setTimeout(()=>{if(incomingPending?.id!==token)return;storeCallRecord({id:uid(),at:incomingPending.at,endedAt:Date.now(),seconds:0,turns:0,direction:'incoming',status:'missed',reason:incomingPending.reason,session:[],transcript:''});data.proactiveState.lastCallAt=Date.now();save();closeIncomingCall();chat({preserveScroll:true})},45000);return true}
+$('#declineIncoming').onclick=()=>{if(!incomingPending)return;storeCallRecord({id:uid(),at:incomingPending.at,endedAt:Date.now(),seconds:0,turns:0,direction:'incoming',status:'declined',reason:incomingPending.reason,session:[],transcript:''});data.proactiveState.lastCallAt=Date.now();save();closeIncomingCall();chat({preserveScroll:true})};
 $('#answerIncoming').onclick=async()=>{if(!incomingPending)return;closeIncomingCall();show('calls');await startVoiceCall(true)};
 $('#closeCallSummary').onclick=()=>$('#callSummary').classList.remove('open');
 $('#callSummaryToChat').onclick=()=>{$('#callSummary').classList.remove('open');show('chat')};
