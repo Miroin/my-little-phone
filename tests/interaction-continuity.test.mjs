@@ -14,10 +14,17 @@ const sceneSource=sourceBetween('function interactionScene','function interactio
 const interactionScene=Function(`${sceneSource}; return interactionScene;`)();
 for(const item of cases)assert.equal(interactionScene(item.input),item.scene,`场景 ${item.id} 分类错误`);
 
+const datasetSource=sourceBetween("const SHENYAN_DATASET_VERSION",'function interactionScene');
+const dataset=Function(`${datasetSource}; return {SHENYAN_DATASET_VERSION,SHENYAN_DECISIONS,SHENYAN_CURATED_SAMPLES};`)();
+assert.equal(dataset.SHENYAN_DATASET_VERSION,'1.0','互动判断数据集版本错误');
+assert.equal(dataset.SHENYAN_CURATED_SAMPLES.length,18,'整理版互动样本数量错误');
+assert.ok(dataset.SHENYAN_CURATED_SAMPLES.every(x=>x.sourceType==='reconstructed'),'重写样本必须明确标记，不能冒充历史原话');
+assert.deepEqual(dataset.SHENYAN_DECISIONS['情绪支持'].priority,['回应具体感受','留下来陪她','等她主动决定要不要讨论办法'],'情绪支持必须先陪伴再讨论办法');
+
 const rejectedSource=sourceBetween('function feedbackIssues','function currentInteractionGuide');
 const guideSource=sourceBetween('function currentInteractionGuide','function promptSystem');
 const guideData={responseFeedback:[{verdict:'dislike',scene:'冲突修复',userText:'你根本不像沈砚',yanText:'那你说说我哪里不像。'}]};
-const currentInteractionGuide=Function('data','interactionScene',`${rejectedSource}${guideSource}; return currentInteractionGuide;`)(guideData,interactionScene);
+const currentInteractionGuide=Function('data','interactionScene','SHENYAN_DECISIONS',`${rejectedSource}${guideSource}; return currentInteractionGuide;`)(guideData,interactionScene,dataset.SHENYAN_DECISIONS);
 assert.match(currentInteractionGuide('我想要亲亲，补偿我'),/亲密本身/,'亲密请求必须得到当下的亲密回应');
 const repairGuide=currentInteractionGuide('你根本不像沈砚');
 assert.match(repairGuide,/回避主动修复/,'相同场景的负面反馈必须抽象成问题类型');
@@ -42,6 +49,7 @@ assert.match(html,/function goBack\(\)/,'页面必须有上一级返回栈');
 assert.match(html,/\.back\[data-home\],\.back\[data-go\]/,'所有左上角返回键必须使用上一级返回');
 assert.match(html,/chat\(\{preserveScroll:true\}\)/,'消息工具操作必须保留当前阅读位置');
 assert.match(html,/feedbackIssues/,'负面反馈必须归纳为问题类型');
-assert.match(html,/x\.feedbackApproved\?\.08:\.18/,'历史样本必须达到相关度门槛，用户认可只能适度降低门槛');
+assert.match(html,/x\.feedbackApproved\?\.08:x\.curated\?\.12:\.18/,'历史、认可和整理版样本必须使用不同相关度门槛');
+assert.match(html,/sourceType=historical_exact 才是历史原话/,'提示词必须区分历史原话与重写参考');
 
 console.log(`通过：${cases.length} 个固定场景、按轮上下文、记忆污染、规则注入、返回层级和滚动位置检查`);
