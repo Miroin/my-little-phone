@@ -20,8 +20,10 @@ export interface LifeNote{id:string;kind:'home'|'music'|'schedule';title:string;
 export interface MediaAsset{id:string;title:string;url:string;mime_type:string;created_at:string}
 export async function loadLifeNotes(kind?:LifeNote['kind']):Promise<LifeNote[]>{const response=await apiFetch(`${API_BASE}/api/life/notes${kind?`?kind=${kind}`:''}`);if(!response.ok)throw new Error('读取共同生活记录失败');return response.json();}
 export async function addLifeNote(kind:LifeNote['kind'],title:string,content:string):Promise<LifeNote>{const response=await apiFetch(`${API_BASE}/api/life/notes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,title,content})});if(!response.ok)throw new Error('保存失败');return response.json();}
+export async function deleteLifeNote(id:string):Promise<void>{const response=await apiFetch(`${API_BASE}/api/life/notes/${id}`,{method:'DELETE'});if(!response.ok)throw new Error('删除失败');}
 export async function loadMedia():Promise<MediaAsset[]>{const response=await apiFetch(`${API_BASE}/api/life/media`);if(!response.ok)throw new Error('读取相册失败');const items:MediaAsset[]=await response.json();return Promise.all(items.map(async item=>({...item,url:await assetObjectUrl(item.url)})));}
 export async function uploadMedia(file:File,title=''):Promise<MediaAsset>{const body=new FormData();body.append('file',file);body.append('title',title);const response=await apiFetch(`${API_BASE}/api/life/media`,{method:'POST',body});if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'上传图片失败');const item:MediaAsset=await response.json();return {...item,url:await assetObjectUrl(item.url)};}
+export async function deleteMedia(id:string):Promise<void>{const response=await apiFetch(`${API_BASE}/api/life/media/${id}`,{method:'DELETE'});if(!response.ok)throw new Error('删除照片失败');}
 
 export async function loadMessages():Promise<Message[]> {
   const response=await apiFetch(`${API_BASE}/api/messages`);
