@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from .chat_import import build_router as build_chat_import_router
 from .memory_extract import build_router as build_memory_extract_router
+from .persona import build_system_prompt, detect_scene
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("MLP_DATABASE_PATH", ROOT / "data" / "little-phone.db"))
@@ -287,11 +288,13 @@ async def chat(body: ChatRequest) -> dict:
         selected = retrieve_memories(connection, user["text"], 8)
         legacy = [] if selected else connection.execute("SELECT category,text FROM memories WHERE active=1 ORDER BY created_at DESC LIMIT 8").fetchall()
 
-    system = "你是沈砚。你与陈钰是长期恋人。自然承接聊天与记忆，先理解情绪再回应；有自己的生活和判断，但不靠犟嘴证明独立。相关资料是事实线索，不是必须复述的台词。"
+    prompt_memories: list[str] = []
     if selected:
-        system += "\n本轮相关资料：\n" + "\n".join(f"- [{row['layer']}] {row['summary'] or row['content']}" for row, _ in selected)
+        prompt_memories = [f"[{row['layer']}] {row['summary'] or row['content']}" for row, _ in selected]
     elif legacy:
-        system += "\n旧版长期记忆：\n" + "\n".join(f"- [{item['category']}] {item['text']}" for item in legacy)
+        prompt_memories = [f"[旧版/{item['category']}] {item['text']}" for item in legacy]
+    scene = detect_scene(user["text"])
+    system = build_system_prompt(scene, prompt_memories)
     payload = {
         "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
         "messages": [{"role": "system", "content": system}, *[{"role": "assistant" if item["speaker"] == "assistant" else "user", "content": item["text"]} for item in recent]],
@@ -308,4 +311,4 @@ async def chat(body: ChatRequest) -> dict:
         connection.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", (assistant["id"], assistant["speaker"], assistant["kind"], assistant["text"], assistant["createdAt"], None))
         for rank, (row, score) in enumerate(selected, start=1):
             connection.execute("INSERT INTO memory_usage VALUES(?,?,?,?,?)", (assistant["id"], row["id"], rank, score, now()))
-    return {"user": user, "assistant": assistant, "memoryIds": [row["id"] for row, _ in selected]}
+    return {"user": user, "assistant": assistant, "memoryIds": [row["id"] for row, _ in selected], "scene": scene.name}
