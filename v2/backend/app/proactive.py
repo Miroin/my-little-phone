@@ -9,8 +9,9 @@ from typing import Callable
 from zoneinfo import ZoneInfo
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
+from .notifications import enqueue_notification
 
 
 class CompanionSettings(BaseModel):
@@ -85,7 +86,10 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
             return [dict(row) for row in connection.execute("SELECT * FROM proactive_events ORDER BY created_at DESC LIMIT 100")]
 
     @router.post("/tick")
-    async def tick() -> dict:
+    async def tick(x_scheduler_token: str | None = Header(default=None)) -> dict:
+        expected = os.getenv("SCHEDULER_TOKEN", "").strip()
+        if not expected or x_scheduler_token != expected:
+            raise HTTPException(status_code=401, detail="调度凭证无效")
         with db_factory() as connection:
             install_proactive_schema(connection, now)
             settings = connection.execute("SELECT * FROM companion_settings WHERE id=1").fetchone()
@@ -143,6 +147,7 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
                 "INSERT INTO proactive_events VALUES(?,?,?,?,?,?,?,?,?)",
                 (event_id, decision["action"], "sent", decision["reason"], decision["text"], message_id, call_id, timestamp, None),
             )
+            enqueue_notification(connection, new_id, now, decision["action"], decision["text"] or ("沈砚想给你打电话" if call_id else "沈砚来找你了"))
         return {**decision, "eventId": event_id, "messageId": message_id, "callId": call_id}
 
     return router

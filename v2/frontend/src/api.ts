@@ -192,3 +192,22 @@ export async function loadCompanionSettings():Promise<CompanionSettings>{
 export async function saveCompanionSettings(settings:CompanionSettings):Promise<CompanionSettings>{
   const response=await fetch(`${API_BASE}/api/companion/settings`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(settings)});if(!response.ok)throw new Error('保存主动陪伴设置失败');return response.json();
 }
+
+function decodeApplicationKey(value:string):ArrayBuffer{
+  const padded=(value+'='.repeat((4-value.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/');
+  return Uint8Array.from(atob(padded),character=>character.charCodeAt(0)).buffer as ArrayBuffer;
+}
+
+export async function subscribeToPush():Promise<void>{
+  if(!('serviceWorker' in navigator)||!('PushManager' in window))throw new Error('当前浏览器不支持网页推送，请先把小手叽添加到主屏幕');
+  const permission=await Notification.requestPermission();
+  if(permission!=='granted')throw new Error('通知权限没有开启');
+  const registration=await navigator.serviceWorker.ready;
+  const keyResponse=await fetch(`${API_BASE}/api/notifications/vapid-public-key`);
+  if(!keyResponse.ok)throw new Error((await keyResponse.json().catch(()=>null))?.detail||'推送服务尚未配置');
+  const {publicKey}=await keyResponse.json();
+  const current=await registration.pushManager.getSubscription();
+  const subscription=current||await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:decodeApplicationKey(publicKey)});
+  const response=await fetch(`${API_BASE}/api/notifications/subscribe`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(subscription.toJSON())});
+  if(!response.ok)throw new Error('保存通知订阅失败');
+}
