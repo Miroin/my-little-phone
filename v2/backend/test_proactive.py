@@ -13,6 +13,7 @@ assert _inside_dnd("01:00", "00:30", "08:30") is True
 assert _inside_dnd("23:30", "23:00", "07:00") is True
 assert _inside_dnd("12:00", "23:00", "07:00") is False
 assert _parse_decision('{"action":"message","text":"刚忙完，想找你待会儿。","reason":"想她"}')["action"] == "message"
+assert _parse_decision('{"action":"voice","text":"想听你说句话。","reason":"突然想你"}')["action"] == "voice"
 settings = main.app.routes
 from app.proactive import install_proactive_schema
 with main.db() as connection:

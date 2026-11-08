@@ -49,7 +49,7 @@ def _parse_decision(value: str) -> dict:
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", value.strip(), flags=re.I)
     data = json.loads(cleaned)
     action = data.get("action")
-    if action not in {"message", "call", "wait"}:
+    if action not in {"message", "voice", "call", "wait"}:
         raise ValueError("invalid action")
     text = str(data.get("text") or "").strip()
     if action != "wait" and not text:
@@ -113,7 +113,8 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
         prompt = f"""你是沈砚的主动陪伴决策层。现在是 {local.strftime('%Y-%m-%d %H:%M %A')}。
 你比较黏人，可以没有特别事情也主动联系陈钰、分享生活、想念或延续话题；也可以自然提出通话。
 不要机械打卡，不要重复上一条，不要因为她没回复连续轰炸。没有合适内容就等待。
-只返回 JSON：{{"action":"message|call|wait","text":"自然短消息或来电开场","reason":"简短原因"}}。
+只返回 JSON：{{"action":"message|voice|call|wait","text":"自然短消息、语音内容或来电开场","reason":"简短原因"}}。
+voice 表示他此刻更想直接发一条语音；只在语气、亲近感或当下情境确实适合时选择，不要每次都发语音。
 允许主动来电：{bool(settings['allow_calls'])}。如果不允许，不能选择 call。
 相关约定：
 {memory or '暂无'}
@@ -138,9 +139,10 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
         event_id, timestamp = new_id(), now()
         message_id = call_id = None
         with db_factory() as connection:
-            if decision["action"] == "message":
+            if decision["action"] in {"message", "voice"}:
                 message_id = new_id()
-                connection.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", (message_id, "assistant", "text", decision["text"], timestamp, None))
+                stored_text = f"[voice] {decision['text']}" if decision["action"] == "voice" else decision["text"]
+                connection.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", (message_id, "assistant", "text", stored_text, timestamp, None))
             else:
                 call_id = new_id()
                 connection.execute("INSERT INTO calls(id,direction,status,started_at,ended_at,duration_seconds,turns_json,answered_at) VALUES(?,?,?,?,?,?,?,?)", (call_id, "incoming", "ringing", timestamp, None, 0, "[]", None))

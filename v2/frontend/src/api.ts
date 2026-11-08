@@ -30,14 +30,22 @@ export async function loadMessages():Promise<Message[]> {
   const response=await apiFetch(`${API_BASE}/api/messages`);
   if(!response.ok) throw new Error('读取聊天失败');
   const items:Message[]=await response.json();
-  return Promise.all(items.map(async message=>message.audioUrl?{...message,audioUrl:await assetObjectUrl(message.audioUrl)}:message));
+  return Promise.all(items.map(async message=>{
+    if(message.audioUrl)return {...message,audioUrl:await assetObjectUrl(message.audioUrl)};
+    const marked=message.speaker==='assistant'&&/^\s*(?:\[voice\]|\[\[voice\]\]|【voice】)/i.test(message.text);
+    if(!marked)return message;
+    const clean=message.text.replace(/^\s*(?:\[voice\]|\[\[voice\]\]|【voice】)\s*/i,'');
+    try{const audio=await synthesizeVoice(message.id);return {...message,kind:'voice' as const,text:audio.transcript,audioUrl:audio.audioUrl,durationMs:audio.duration_ms,voiceStatus:'ready' as const};}
+    catch{return {...message,text:clean,voiceStatus:'failed' as const};}
+  }));
 }
 
-export async function synthesizeVoice(messageId:string):Promise<{audioUrl:string;duration_ms:number;transcript:string}>{
-  const response=await apiFetch(`${API_BASE}/api/voice/messages/${messageId}`,{method:'POST'});
-  if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'语音生成失败');
-  const result=await response.json();
-  return {...result,audioUrl:await assetObjectUrl(result.audioUrl)};
+type VoiceResult={audioUrl:string;duration_ms:number;transcript:string};
+const voiceJobs=new Map<string,Promise<VoiceResult>>();
+export function synthesizeVoice(messageId:string):Promise<VoiceResult>{
+  const running=voiceJobs.get(messageId);if(running)return running;
+  const job=(async()=>{const response=await apiFetch(`${API_BASE}/api/voice/messages/${messageId}`,{method:'POST'});if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'语音生成失败');const result=await response.json();return {...result,audioUrl:await assetObjectUrl(result.audioUrl)};})();
+  voiceJobs.set(messageId,job);job.then(()=>voiceJobs.delete(messageId),()=>voiceJobs.delete(messageId));return job;
 }
 
 type StreamHandlers={
