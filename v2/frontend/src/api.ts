@@ -184,6 +184,11 @@ export async function answerCall(id:string):Promise<CallRecord>{
   if(!response.ok)throw new Error('接听失败');
   return response.json();
 }
+export async function replyInCall(id:string,text:string):Promise<{user:{messageId:string;text:string};assistant:{messageId:string;text:string}}>{
+  const response=await fetch(`${API_BASE}/api/calls/${id}/reply`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+  if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'通话回复中断');
+  return response.json();
+}
 
 export interface CompanionSettings {enabled:boolean;allow_calls:boolean;dnd_enabled:boolean;dnd_start:string;dnd_end:string;timezone:string}
 export async function loadCompanionSettings():Promise<CompanionSettings>{

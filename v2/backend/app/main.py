@@ -174,6 +174,10 @@ class CallEnd(BaseModel):
     status: Literal["answered", "missed", "declined"] = "answered"
 
 
+class CallReply(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
+
+
 def message_dict(row: sqlite3.Row) -> dict:
     result = {"id": row["id"], "speaker": row["speaker"], "kind": row["kind"], "text": row["text"], "createdAt": row["created_at"], "callId": row["call_id"]}
     keys = row.keys()
@@ -191,6 +195,14 @@ def memory_dict(row: sqlite3.Row) -> dict:
         "lastReinforcedAt": row["last_reinforced_at"], "sourceType": row["source_type"],
         "sourceId": row["source_id"], "sourceHash": row["source_hash"],
         "tags": json.loads(row["tags_json"] or "[]"), "embeddingStatus": row["embedding_status"],
+    }
+
+
+def call_dict(row: sqlite3.Row) -> dict:
+    return {
+        "id": row["id"], "direction": row["direction"], "status": row["status"],
+        "startedAt": row["started_at"], "endedAt": row["ended_at"],
+        "durationSeconds": row["duration_seconds"], "turns": json.loads(row["turns_json"] or "[]"),
     }
 
 
@@ -442,7 +454,7 @@ def create_feedback(body: FeedbackCreate) -> dict:
 def list_calls(limit: int = Query(default=50, ge=1, le=200)) -> list[dict]:
     with db() as connection:
         rows = connection.execute("SELECT * FROM calls ORDER BY started_at DESC LIMIT ?", (limit,)).fetchall()
-    return [{**dict(row), "turns": json.loads(row["turns_json"] or "[]")} for row in rows]
+    return [call_dict(row) for row in rows]
 
 
 @app.post("/api/calls", status_code=201)
@@ -476,7 +488,7 @@ def answer_call(call_id: str) -> dict:
             raise HTTPException(status_code=404, detail="来电不存在或已经处理")
         connection.execute("UPDATE proactive_events SET status='answered',answered_at=? WHERE call_id=?", (now(), call_id))
         row = connection.execute("SELECT * FROM calls WHERE id=?", (call_id,)).fetchone()
-    return {**dict(row), "turns": json.loads(row["turns_json"] or "[]")}
+    return call_dict(row)
 
 
 @app.post("/api/calls/{call_id}/end")
@@ -486,8 +498,10 @@ def end_call(call_id: str, body: CallEnd) -> dict:
         row = connection.execute("SELECT * FROM calls WHERE id=?", (call_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="没有找到这次通话")
-        if row["status"] != "active":
-            return {**dict(row), "turns": json.loads(row["turns_json"] or "[]")}
+        if row["status"] not in {"active", "ringing"}:
+            return call_dict(row)
+        if row["status"] == "ringing" and body.status == "answered":
+            raise HTTPException(status_code=409, detail="请先接听来电")
         started = datetime.fromisoformat(row["started_at"])
         duration = max(0, int((ended - started).total_seconds())) if body.status == "answered" else 0
         connection.execute("UPDATE calls SET status=?,ended_at=?,duration_seconds=? WHERE id=?", (body.status, ended.isoformat(), duration, call_id))
@@ -495,7 +509,45 @@ def end_call(call_id: str, body: CallEnd) -> dict:
         event_text = f"{label} · {duration // 60:02d}:{duration % 60:02d}" if duration else label
         connection.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", (new_id(), "assistant", "call_event", event_text, ended.isoformat(), call_id))
         updated = connection.execute("SELECT * FROM calls WHERE id=?", (call_id,)).fetchone()
-    return {**dict(updated), "turns": json.loads(updated["turns_json"] or "[]")}
+    return call_dict(updated)
+
+
+@app.post("/api/calls/{call_id}/reply")
+async def reply_in_call(call_id: str, body: CallReply) -> dict:
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="服务端尚未配置 DeepSeek API Key")
+    user_turn = add_call_turn(call_id, CallTurnCreate(speaker="user", text=body.text))
+    with db() as connection:
+        call = connection.execute("SELECT * FROM calls WHERE id=? AND status='active'", (call_id,)).fetchone()
+        if not call:
+            raise HTTPException(status_code=404, detail="通话已经结束")
+        turns = json.loads(call["turns_json"] or "[]")[-20:]
+        selected = retrieve_memories(connection, body.text, 7)
+    memories = [f"[{row['layer']}] {row['summary'] or row['content']}" for row, _ in selected]
+    scene = detect_scene(body.text)
+    system = build_system_prompt(scene, memories) + "\n你们正在实时语音通话。说得自然、短一些，像真的电话口语；不要写动作括号、旁白、标签或舞台说明。"
+    payload = {
+        "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+        "messages": [{"role": "system", "content": system}, *[
+            {"role": "assistant" if item["speaker"] == "assistant" else "user", "content": item["text"]} for item in turns
+        ]],
+        "temperature": 0.82,
+        "stream": False,
+    }
+    async with httpx.AsyncClient(timeout=60) as client:
+        response = await client.post(
+            os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/chat/completions"),
+            headers={"Authorization": f"Bearer {api_key}"}, json=payload,
+        )
+    if response.is_error:
+        raise HTTPException(status_code=502, detail="通话回复暂时中断")
+    try:
+        answer = response.json()["choices"][0]["message"]["content"].strip()
+    except (KeyError, IndexError, TypeError, AttributeError) as exc:
+        raise HTTPException(status_code=502, detail="通话回复格式错误") from exc
+    assistant_turn = add_call_turn(call_id, CallTurnCreate(speaker="assistant", text=answer))
+    return {"user": user_turn, "assistant": assistant_turn, "memoryIds": [row["id"] for row, _ in selected]}
 
 
 @app.post("/api/chat/stream")
