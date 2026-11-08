@@ -21,6 +21,8 @@ services:
         sync: false
       - key: SCHEDULER_TOKEN
         generateValue: true
+      - key: MLP_ACCESS_TOKEN
+        generateValue: true
       - key: VAPID_PUBLIC_KEY
         sync: false
       - key: VAPID_PRIVATE_KEY

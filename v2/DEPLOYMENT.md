@@ -8,9 +8,12 @@
 - `MINIMAX_API_KEY`
 - `MINIMAX_VOICE_ID`
 - `SCHEDULER_TOKEN`
+- `MLP_ACCESS_TOKEN`（保护聊天、记忆、相册和付费模型接口的个人访问口令）
 - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`
 
 SQLite 与音频都写入 `/data`，重新部署不会丢失。正式迁移前仍应下载一份 v2 完整备份。
+
+Render 蓝图会自动生成 `MLP_ACCESS_TOKEN`。部署完成后在 Render 环境变量中复制它，再填入小手叽“设置 → 模型与接口 → 个人访问口令”。不要把它写进仓库、截图或分享给其他人。
 
 ## 2. 主动陪伴调度
 

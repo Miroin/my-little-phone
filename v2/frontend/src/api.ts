@@ -1,32 +1,40 @@
 import type { CallRecord,ExtractionJob,ImportBatch,IntegrityReport,Memory,MemoryCandidate,Message,RestorePreview } from './types';
 
-const API_BASE=(localStorage.getItem('mlp_v2_api_base')||import.meta.env.VITE_API_BASE_URL||'http://127.0.0.1:8000').replace(/\/$/,'');
+let API_BASE=(localStorage.getItem('mlp_v2_api_base')||import.meta.env.VITE_API_BASE_URL||'http://127.0.0.1:8000').replace(/\/$/,'');
 export const currentApiBase=()=>API_BASE;
-export function saveApiBase(value:string){const normalized=value.trim().replace(/\/$/,'');if(!/^https?:\/\//i.test(normalized))throw new Error('请输入完整的 http 或 https 地址');localStorage.setItem('mlp_v2_api_base',normalized);}
-export async function checkBackend():Promise<{ok:boolean;modelConfigured:boolean;memoryCount:number}>{const response=await fetch(`${API_BASE}/health`);if(!response.ok)throw new Error('后端连接失败');return response.json();}
+export const currentAccessToken=()=>localStorage.getItem('mlp_v2_access_token')||'';
+export function saveApiBase(value:string){const normalized=value.trim().replace(/\/$/,'');if(!/^https?:\/\//i.test(normalized))throw new Error('请输入完整的 http 或 https 地址');API_BASE=normalized;localStorage.setItem('mlp_v2_api_base',normalized);}
+export function saveAccessToken(value:string){localStorage.setItem('mlp_v2_access_token',value.trim());}
+async function apiFetch(input:RequestInfo|URL,init:RequestInit={}):Promise<Response>{
+  const headers=new Headers(init.headers||{}),token=currentAccessToken();
+  if(token)headers.set('X-MLP-Access-Token',token);
+  return window.fetch(input,{...init,headers});
+}
+async function assetObjectUrl(path:string):Promise<string>{const response=await apiFetch(`${API_BASE}${path}`);if(!response.ok)throw new Error('读取媒体失败');return URL.createObjectURL(await response.blob());}
+export async function checkBackend():Promise<{ok:boolean;modelConfigured:boolean;memoryCount:number}>{const health=await window.fetch(`${API_BASE}/health`);if(!health.ok)throw new Error('后端连接失败');const response=await apiFetch(`${API_BASE}/api/session`);if(!response.ok)throw new Error(response.status===401?'服务访问口令不正确':'后端连接失败');return health.json();}
 export interface CharacterProfile{subject:'shenyan'|'user';displayName:string;categories:Record<'identity'|'appearance'|'personality'|'relationship'|'habits'|'life',string>;updatedAt:string}
-export async function loadProfiles():Promise<CharacterProfile[]>{const response=await fetch(`${API_BASE}/api/profiles`);if(!response.ok)throw new Error('读取人物档案失败');return response.json();}
-export async function saveProfile(profile:CharacterProfile):Promise<CharacterProfile>{const response=await fetch(`${API_BASE}/api/profiles/${profile.subject}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:profile.displayName,categories:profile.categories})});if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'保存档案失败');return response.json();}
-export async function sendMessageFeedback(messageId:string,verdict:'like'|'dislike',reason=''):Promise<void>{const response=await fetch(`${API_BASE}/api/memory-feedback`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message_id:messageId,scene:'chat',verdict,reason})});if(!response.ok)throw new Error('反馈保存失败');}
+export async function loadProfiles():Promise<CharacterProfile[]>{const response=await apiFetch(`${API_BASE}/api/profiles`);if(!response.ok)throw new Error('读取人物档案失败');return response.json();}
+export async function saveProfile(profile:CharacterProfile):Promise<CharacterProfile>{const response=await apiFetch(`${API_BASE}/api/profiles/${profile.subject}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:profile.displayName,categories:profile.categories})});if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'保存档案失败');return response.json();}
+export async function sendMessageFeedback(messageId:string,verdict:'like'|'dislike',reason=''):Promise<void>{const response=await apiFetch(`${API_BASE}/api/memory-feedback`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message_id:messageId,scene:'chat',verdict,reason})});if(!response.ok)throw new Error('反馈保存失败');}
 export interface LifeNote{id:string;kind:'home'|'music'|'schedule';title:string;content:string;created_at:string;updated_at:string}
 export interface MediaAsset{id:string;title:string;url:string;mime_type:string;created_at:string}
-export async function loadLifeNotes(kind?:LifeNote['kind']):Promise<LifeNote[]>{const response=await fetch(`${API_BASE}/api/life/notes${kind?`?kind=${kind}`:''}`);if(!response.ok)throw new Error('读取共同生活记录失败');return response.json();}
-export async function addLifeNote(kind:LifeNote['kind'],title:string,content:string):Promise<LifeNote>{const response=await fetch(`${API_BASE}/api/life/notes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,title,content})});if(!response.ok)throw new Error('保存失败');return response.json();}
-export async function loadMedia():Promise<MediaAsset[]>{const response=await fetch(`${API_BASE}/api/life/media`);if(!response.ok)throw new Error('读取相册失败');const items:MediaAsset[]=await response.json();return items.map(item=>({...item,url:`${API_BASE}${item.url}`}));}
-export async function uploadMedia(file:File,title=''):Promise<MediaAsset>{const body=new FormData();body.append('file',file);body.append('title',title);const response=await fetch(`${API_BASE}/api/life/media`,{method:'POST',body});if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'上传图片失败');const item=await response.json();return {...item,url:`${API_BASE}${item.url}`};}
+export async function loadLifeNotes(kind?:LifeNote['kind']):Promise<LifeNote[]>{const response=await apiFetch(`${API_BASE}/api/life/notes${kind?`?kind=${kind}`:''}`);if(!response.ok)throw new Error('读取共同生活记录失败');return response.json();}
+export async function addLifeNote(kind:LifeNote['kind'],title:string,content:string):Promise<LifeNote>{const response=await apiFetch(`${API_BASE}/api/life/notes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,title,content})});if(!response.ok)throw new Error('保存失败');return response.json();}
+export async function loadMedia():Promise<MediaAsset[]>{const response=await apiFetch(`${API_BASE}/api/life/media`);if(!response.ok)throw new Error('读取相册失败');const items:MediaAsset[]=await response.json();return Promise.all(items.map(async item=>({...item,url:await assetObjectUrl(item.url)})));}
+export async function uploadMedia(file:File,title=''):Promise<MediaAsset>{const body=new FormData();body.append('file',file);body.append('title',title);const response=await apiFetch(`${API_BASE}/api/life/media`,{method:'POST',body});if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'上传图片失败');const item:MediaAsset=await response.json();return {...item,url:await assetObjectUrl(item.url)};}
 
 export async function loadMessages():Promise<Message[]> {
-  const response=await fetch(`${API_BASE}/api/messages`);
+  const response=await apiFetch(`${API_BASE}/api/messages`);
   if(!response.ok) throw new Error('读取聊天失败');
   const items:Message[]=await response.json();
-  return items.map(message=>message.audioUrl?{...message,audioUrl:`${API_BASE}${message.audioUrl}`}:message);
+  return Promise.all(items.map(async message=>message.audioUrl?{...message,audioUrl:await assetObjectUrl(message.audioUrl)}:message));
 }
 
 export async function synthesizeVoice(messageId:string):Promise<{audioUrl:string;duration_ms:number;transcript:string}>{
-  const response=await fetch(`${API_BASE}/api/voice/messages/${messageId}`,{method:'POST'});
+  const response=await apiFetch(`${API_BASE}/api/voice/messages/${messageId}`,{method:'POST'});
   if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'语音生成失败');
   const result=await response.json();
-  return {...result,audioUrl:`${API_BASE}${result.audioUrl}`};
+  return {...result,audioUrl:await assetObjectUrl(result.audioUrl)};
 }
 
 type StreamHandlers={
@@ -36,7 +44,7 @@ type StreamHandlers={
 };
 
 export async function streamMessage(text:string,requestId:string,signal:AbortSignal,handlers:StreamHandlers):Promise<void>{
-  const response=await fetch(`${API_BASE}/api/chat/stream`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,request_id:requestId}),signal});
+  const response=await apiFetch(`${API_BASE}/api/chat/stream`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,request_id:requestId}),signal});
   if(!response.ok) throw new Error((await response.json().catch(()=>null))?.detail||'发送失败');
   if(!response.body) throw new Error('当前浏览器不能读取流式回复');
   const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
@@ -62,80 +70,80 @@ export async function streamMessage(text:string,requestId:string,signal:AbortSig
 }
 
 export async function loadMemories():Promise<Memory[]> {
-  const response=await fetch(`${API_BASE}/api/memories?limit=100`);
+  const response=await apiFetch(`${API_BASE}/api/memories?limit=100`);
   if(!response.ok) throw new Error('读取记忆失败');
   return response.json();
 }
 
 export async function updateMemory(memory:Memory):Promise<Memory>{
-  const response=await fetch(`${API_BASE}/api/memories/${memory.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({layer:memory.layer,content:memory.content,summary:memory.summary,importance:memory.importance,confidence:memory.confidence,tags:memory.tags})});
+  const response=await apiFetch(`${API_BASE}/api/memories/${memory.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({layer:memory.layer,content:memory.content,summary:memory.summary,importance:memory.importance,confidence:memory.confidence,tags:memory.tags})});
   if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'记忆修改失败');
   return response.json();
 }
 
 export async function setMemoryStatus(id:string,status:Memory['status']):Promise<Memory>{
-  const response=await fetch(`${API_BASE}/api/memories/${id}/status`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
+  const response=await apiFetch(`${API_BASE}/api/memories/${id}/status`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
   if(!response.ok)throw new Error('记忆状态修改失败');
   return response.json();
 }
 
 export async function reinforceMemory(id:string):Promise<Memory>{
-  const response=await fetch(`${API_BASE}/api/memories/${id}/reinforce`,{method:'POST'});
+  const response=await apiFetch(`${API_BASE}/api/memories/${id}/reinforce`,{method:'POST'});
   if(!response.ok)throw new Error('记忆加强失败');
   return response.json();
 }
 
 export async function uploadChatHistory(file:File):Promise<ImportBatch> {
   const body=new FormData();body.append('file',file);
-  const response=await fetch(`${API_BASE}/api/history-imports/chatgpt`,{method:'POST',body});
+  const response=await apiFetch(`${API_BASE}/api/history-imports/chatgpt`,{method:'POST',body});
   if(!response.ok) throw new Error((await response.json().catch(()=>null))?.detail||'读取聊天文件失败');
   return response.json();
 }
 
 export async function createLocalCandidates(batchId:string):Promise<{created:number;counts:Record<string,number>}> {
-  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/local-candidates`,{method:'POST'});
+  const response=await apiFetch(`${API_BASE}/api/history-imports/${batchId}/local-candidates`,{method:'POST'});
   if(!response.ok) throw new Error((await response.json().catch(()=>null))?.detail||'本地初筛失败');
   return response.json();
 }
 
 export async function loadCandidates(batchId:string,offset=0):Promise<{total:number;items:MemoryCandidate[]}> {
-  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/candidates?offset=${offset}&limit=20`);
+  const response=await apiFetch(`${API_BASE}/api/history-imports/${batchId}/candidates?offset=${offset}&limit=20`);
   if(!response.ok) throw new Error('读取候选记忆失败');
   return response.json();
 }
 
 export async function acceptCandidates(batchId:string,ids:string[]):Promise<{accepted:number;skippedDuplicates:number;blockedConflicts:string[]}> {
-  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/candidates/accept`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});
+  const response=await apiFetch(`${API_BASE}/api/history-imports/${batchId}/candidates/accept`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});
   if(!response.ok) throw new Error('写入长期记忆失败');
   return response.json();
 }
 
 export async function analyzeCandidates(batchId:string):Promise<{analyzed:number;created:number;counts:Record<string,number>}>{
-  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/candidates/analyze`,{method:'POST'});
+  const response=await apiFetch(`${API_BASE}/api/history-imports/${batchId}/candidates/analyze`,{method:'POST'});
   if(!response.ok)throw new Error('相似与冲突检查失败');
   return response.json();
 }
 
 export async function updateCandidate(batchId:string,id:string,layer:MemoryCandidate['layer'],summary:string):Promise<MemoryCandidate>{
-  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/candidates/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({layer,summary})});
+  const response=await apiFetch(`${API_BASE}/api/history-imports/${batchId}/candidates/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({layer,summary})});
   if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'候选修改失败');
   return response.json();
 }
 
 export async function rejectCandidates(batchId:string,ids:string[]):Promise<{rejected:number}>{
-  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/candidates/reject`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});
+  const response=await apiFetch(`${API_BASE}/api/history-imports/${batchId}/candidates/reject`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});
   if(!response.ok)throw new Error('忽略候选失败');
   return response.json();
 }
 
 export async function loadIntegrityReport(batchId:string):Promise<IntegrityReport>{
-  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/integrity-report`);
+  const response=await apiFetch(`${API_BASE}/api/history-imports/${batchId}/integrity-report`);
   if(!response.ok)throw new Error('生成迁移报告失败');
   return response.json();
 }
 
 export async function downloadBackup():Promise<void>{
-  const response=await fetch(`${API_BASE}/api/backups/export`);
+  const response=await apiFetch(`${API_BASE}/api/backups/export`);
   if(!response.ok)throw new Error('备份生成失败');
   const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement('a');
   const disposition=response.headers.get('Content-Disposition')||'';
@@ -145,73 +153,73 @@ export async function downloadBackup():Promise<void>{
 
 export async function previewRestore(file:File):Promise<RestorePreview>{
   const body=new FormData();body.append('file',file);
-  const response=await fetch(`${API_BASE}/api/backups/restore-preview`,{method:'POST',body});
+  const response=await apiFetch(`${API_BASE}/api/backups/restore-preview`,{method:'POST',body});
   if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'备份检查失败');
   return response.json();
 }
 
 export async function confirmRestore(token:string):Promise<{restored:boolean;inserted:Record<string,number>}>{
-  const response=await fetch(`${API_BASE}/api/backups/restore-confirm`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,mode:'merge'})});
+  const response=await apiFetch(`${API_BASE}/api/backups/restore-confirm`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,mode:'merge'})});
   if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'恢复失败');
   return response.json();
 }
 
 export async function createExtractionJob(batchId:string):Promise<ExtractionJob>{
-  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/extraction-jobs`,{method:'POST'});
+  const response=await apiFetch(`${API_BASE}/api/history-imports/${batchId}/extraction-jobs`,{method:'POST'});
   if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'创建精提取任务失败');
   return response.json();
 }
 
 export async function controlExtractionJob(batchId:string,jobId:string,action:'pause'|'resume'|'retry'):Promise<ExtractionJob>{
-  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/extraction-jobs/${jobId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+  const response=await apiFetch(`${API_BASE}/api/history-imports/${batchId}/extraction-jobs/${jobId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
   if(!response.ok)throw new Error('任务操作失败');
   return response.json();
 }
 
 export async function runExtractionStep(batchId:string,jobId:string):Promise<{job:ExtractionJob;created:number;failed:number;complete:boolean}>{
-  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/deepseek-candidates?max_conversations=3&job_id=${jobId}`,{method:'POST'});
+  const response=await apiFetch(`${API_BASE}/api/history-imports/${batchId}/deepseek-candidates?max_conversations=3&job_id=${jobId}`,{method:'POST'});
   if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'精提取暂停');
   return response.json();
 }
 
 export async function startCall(direction:'incoming'|'outgoing'='outgoing'):Promise<CallRecord>{
-  const response=await fetch(`${API_BASE}/api/calls`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({direction})});
+  const response=await apiFetch(`${API_BASE}/api/calls`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({direction})});
   if(!response.ok)throw new Error('通话建立失败');
   return response.json();
 }
 
 export async function endCall(id:string,status:'answered'|'missed'|'declined'='answered'):Promise<CallRecord>{
-  const response=await fetch(`${API_BASE}/api/calls/${id}/end`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
+  const response=await apiFetch(`${API_BASE}/api/calls/${id}/end`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
   if(!response.ok)throw new Error('挂断失败');
   return response.json();
 }
 
 export async function loadCalls():Promise<CallRecord[]>{
-  const response=await fetch(`${API_BASE}/api/calls`);
+  const response=await apiFetch(`${API_BASE}/api/calls`);
   if(!response.ok)throw new Error('读取通话记录失败');
   return response.json();
 }
 
 export async function answerCall(id:string):Promise<CallRecord>{
-  const response=await fetch(`${API_BASE}/api/calls/${id}/answer`,{method:'POST'});
+  const response=await apiFetch(`${API_BASE}/api/calls/${id}/answer`,{method:'POST'});
   if(!response.ok)throw new Error('接听失败');
   return response.json();
 }
 export async function replyInCall(id:string,text:string):Promise<{user:{messageId:string;text:string};assistant:{messageId:string;text:string}}>{
-  const response=await fetch(`${API_BASE}/api/calls/${id}/reply`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+  const response=await apiFetch(`${API_BASE}/api/calls/${id}/reply`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
   if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'通话回复中断');
   return response.json();
 }
 
 export interface CompanionSettings {enabled:boolean;allow_calls:boolean;dnd_enabled:boolean;dnd_start:string;dnd_end:string;timezone:string}
 export async function loadCompanionSettings():Promise<CompanionSettings>{
-  const response=await fetch(`${API_BASE}/api/companion/settings`);if(!response.ok)throw new Error('读取主动陪伴设置失败');return response.json();
+  const response=await apiFetch(`${API_BASE}/api/companion/settings`);if(!response.ok)throw new Error('读取主动陪伴设置失败');return response.json();
 }
 export async function saveCompanionSettings(settings:CompanionSettings):Promise<CompanionSettings>{
-  const response=await fetch(`${API_BASE}/api/companion/settings`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(settings)});if(!response.ok)throw new Error('保存主动陪伴设置失败');return response.json();
+  const response=await apiFetch(`${API_BASE}/api/companion/settings`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(settings)});if(!response.ok)throw new Error('保存主动陪伴设置失败');return response.json();
 }
 export interface ProactiveEvent{id:string;event_type:'message'|'call';status:string;reason:string;text:string;created_at:string;answered_at?:string}
-export async function loadProactiveEvents():Promise<ProactiveEvent[]>{const response=await fetch(`${API_BASE}/api/companion/events`);if(!response.ok)throw new Error('读取主动陪伴动态失败');return response.json();}
+export async function loadProactiveEvents():Promise<ProactiveEvent[]>{const response=await apiFetch(`${API_BASE}/api/companion/events`);if(!response.ok)throw new Error('读取主动陪伴动态失败');return response.json();}
 
 function decodeApplicationKey(value:string):ArrayBuffer{
   const padded=(value+'='.repeat((4-value.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/');
@@ -223,11 +231,11 @@ export async function subscribeToPush():Promise<void>{
   const permission=await Notification.requestPermission();
   if(permission!=='granted')throw new Error('通知权限没有开启');
   const registration=await navigator.serviceWorker.ready;
-  const keyResponse=await fetch(`${API_BASE}/api/notifications/vapid-public-key`);
+  const keyResponse=await apiFetch(`${API_BASE}/api/notifications/vapid-public-key`);
   if(!keyResponse.ok)throw new Error((await keyResponse.json().catch(()=>null))?.detail||'推送服务尚未配置');
   const {publicKey}=await keyResponse.json();
   const current=await registration.pushManager.getSubscription();
   const subscription=current||await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:decodeApplicationKey(publicKey)});
-  const response=await fetch(`${API_BASE}/api/notifications/subscribe`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(subscription.toJSON())});
+  const response=await apiFetch(`${API_BASE}/api/notifications/subscribe`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(subscription.toJSON())});
   if(!response.ok)throw new Error('保存通知订阅失败');
 }

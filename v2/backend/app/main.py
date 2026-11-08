@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import math
 import os
@@ -14,7 +15,7 @@ from typing import Literal
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .chat_import import build_router as build_chat_import_router, install_schema as install_import_schema
@@ -39,6 +40,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def require_private_access(request: Request, call_next):
+    """Protect personal data and paid endpoints when a service token is configured."""
+    expected = os.getenv("MLP_ACCESS_TOKEN", "").strip()
+    if expected and request.url.path.startswith("/api/") and request.method != "OPTIONS":
+        scheduler = os.getenv("SCHEDULER_TOKEN", "").strip()
+        scheduler_ok = bool(scheduler and hmac.compare_digest(request.headers.get("X-Scheduler-Token", ""), scheduler))
+        supplied = request.headers.get("X-MLP-Access-Token", "")
+        bearer = request.headers.get("Authorization", "")
+        if bearer.lower().startswith("bearer "):
+            supplied = bearer[7:].strip()
+        if not scheduler_ok and not hmac.compare_digest(supplied, expected):
+            return Response(
+                content=json.dumps({"detail": "需要小手叽服务访问口令"}, ensure_ascii=False),
+                status_code=401,
+                media_type="application/json",
+            )
+    return await call_next(request)
 
 MemoryLayer = Literal["personality", "relationship", "user", "event", "feeling", "plan", "sample"]
 MemoryStatus = Literal["candidate", "active", "archived", "superseded", "deleted"]
@@ -327,6 +348,11 @@ def health() -> dict:
     with db() as connection:
         memory_count = connection.execute("SELECT COUNT(*) FROM memory_items WHERE status!='deleted'").fetchone()[0]
     return {"ok": True, "database": DB_PATH.name, "modelConfigured": bool(os.getenv("DEEPSEEK_API_KEY")), "memorySchema": 2, "memoryCount": memory_count}
+
+
+@app.get("/api/session")
+def private_session() -> dict:
+    return {"ok": True, "authenticated": True}
 
 
 @app.get("/api/messages")
