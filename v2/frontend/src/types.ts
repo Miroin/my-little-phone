@@ -89,7 +89,7 @@ export interface RestorePreview {
 export interface ExtractionJob {
   id: string;
   batch_id: string;
-  status: 'ready'|'running'|'paused'|'complete';
+  status: 'ready'|'running'|'paused'|'needs_retry'|'complete';
   total: number;
   processed: number;
   failed: number;

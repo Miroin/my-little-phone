@@ -37,6 +37,28 @@ def install_extraction_schema(connection: sqlite3.Connection) -> None:
     )
 
 
+def queued_conversations(connection: sqlite3.Connection, batch_id: str, limit: int) -> list[sqlite3.Row]:
+    return connection.execute(
+        """SELECT c.* FROM imported_conversations c
+        LEFT JOIN extraction_runs r ON r.conversation_id=c.id
+        WHERE c.batch_id=? AND (r.conversation_id IS NULL OR r.status='retry')
+        ORDER BY COALESCE(c.created_at,'') ASC LIMIT ?""",
+        (batch_id, limit),
+    ).fetchall()
+
+
+def extraction_queue_counts(connection: sqlite3.Connection, batch_id: str) -> tuple[int, int]:
+    remaining = connection.execute(
+        """SELECT COUNT(*) FROM imported_conversations c LEFT JOIN extraction_runs r ON r.conversation_id=c.id
+        WHERE c.batch_id=? AND (r.conversation_id IS NULL OR r.status='retry')""", (batch_id,),
+    ).fetchone()[0]
+    failed = connection.execute(
+        """SELECT COUNT(*) FROM extraction_runs WHERE status='failed' AND conversation_id IN
+        (SELECT id FROM imported_conversations WHERE batch_id=?)""", (batch_id,),
+    ).fetchone()[0]
+    return remaining, failed
+
+
 def parse_candidate_payload(text: str) -> list[dict]:
     cleaned = text.strip()
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.IGNORECASE)
@@ -91,7 +113,7 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
             if not connection.execute("SELECT 1 FROM import_batches WHERE id=? AND status='previewed'", (batch_id,)).fetchone():
                 raise HTTPException(status_code=404, detail="没有找到已读取完成的历史聊天")
             existing = connection.execute(
-                "SELECT * FROM extraction_jobs WHERE batch_id=? AND status IN ('ready','running','paused') ORDER BY created_at DESC LIMIT 1", (batch_id,)
+                "SELECT * FROM extraction_jobs WHERE batch_id=? AND status IN ('ready','running','paused','needs_retry') ORDER BY created_at DESC LIMIT 1", (batch_id,)
             ).fetchone()
             if existing:
                 return dict(existing)
@@ -150,19 +172,16 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
                 if job["status"] == "complete":
                     return {"processed": 0, "created": 0, "failed": 0, "complete": True, "job": dict(job)}
                 connection.execute("UPDATE extraction_jobs SET status='running',updated_at=? WHERE id=?", (now(), job_id))
-            conversations = connection.execute(
-                """SELECT c.* FROM imported_conversations c
-                LEFT JOIN extraction_runs r ON r.conversation_id=c.id AND r.status='done'
-                WHERE c.batch_id=? AND r.conversation_id IS NULL
-                ORDER BY COALESCE(c.created_at,'') ASC LIMIT ?""",
-                (batch_id, max_conversations),
-            ).fetchall()
+            conversations = queued_conversations(connection, batch_id, max_conversations)
         if not conversations:
             result = {"processed": 0, "created": 0, "complete": True}
             if job_id:
                 with db_factory() as connection:
-                    connection.execute("UPDATE extraction_jobs SET status='complete',updated_at=? WHERE id=?", (now(), job_id))
+                    _, failed_total = extraction_queue_counts(connection, batch_id)
+                    final_status = "needs_retry" if failed_total else "complete"
+                    connection.execute("UPDATE extraction_jobs SET status=?,updated_at=? WHERE id=?", (final_status, now(), job_id))
                     result["job"] = dict(connection.execute("SELECT * FROM extraction_jobs WHERE id=?", (job_id,)).fetchone())
+                    result["complete"] = final_status == "complete"
             return result
 
         processed = 0
@@ -219,11 +238,8 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
         result = {"processed": processed, "created": created, "failed": len(errors), "failedTitles": errors, "complete": complete}
         if job_id:
             with db_factory() as connection:
-                remaining = connection.execute(
-                    """SELECT COUNT(*) FROM imported_conversations c LEFT JOIN extraction_runs r ON r.conversation_id=c.id AND r.status='done'
-                    WHERE c.batch_id=? AND r.conversation_id IS NULL""", (batch_id,)
-                ).fetchone()[0]
-                status = "complete" if remaining == 0 else "ready"
+                remaining, failed_total = extraction_queue_counts(connection, batch_id)
+                status = ("needs_retry" if failed_total else "complete") if remaining == 0 else "ready"
                 connection.execute(
                     """UPDATE extraction_jobs SET status=?,processed=processed+?,failed=failed+?,created=created+?,
                     last_error=?,updated_at=? WHERE id=?""",
