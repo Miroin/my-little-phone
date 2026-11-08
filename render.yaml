@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: my-little-phone-v2-api
+    runtime: docker
+    dockerfilePath: ./v2/backend/Dockerfile
+    dockerContext: ./v2/backend
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: little-phone-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: MLP_ALLOWED_ORIGINS
+        value: https://miroin.github.io
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: MINIMAX_API_KEY
+        sync: false
+      - key: MINIMAX_VOICE_ID
+        sync: false
+      - key: SCHEDULER_TOKEN
+        generateValue: true
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false

@@ -1,6 +1,13 @@
 import type { CallRecord,ExtractionJob,ImportBatch,IntegrityReport,Memory,MemoryCandidate,Message,RestorePreview } from './types';
 
-const API_BASE=(import.meta.env.VITE_API_BASE_URL||'http://127.0.0.1:8000').replace(/\/$/,'');
+const API_BASE=(localStorage.getItem('mlp_v2_api_base')||import.meta.env.VITE_API_BASE_URL||'http://127.0.0.1:8000').replace(/\/$/,'');
+export const currentApiBase=()=>API_BASE;
+export function saveApiBase(value:string){const normalized=value.trim().replace(/\/$/,'');if(!/^https?:\/\//i.test(normalized))throw new Error('请输入完整的 http 或 https 地址');localStorage.setItem('mlp_v2_api_base',normalized);}
+export async function checkBackend():Promise<{ok:boolean;modelConfigured:boolean;memoryCount:number}>{const response=await fetch(`${API_BASE}/health`);if(!response.ok)throw new Error('后端连接失败');return response.json();}
+export interface CharacterProfile{subject:'shenyan'|'user';displayName:string;categories:Record<'identity'|'appearance'|'personality'|'relationship'|'habits'|'life',string>;updatedAt:string}
+export async function loadProfiles():Promise<CharacterProfile[]>{const response=await fetch(`${API_BASE}/api/profiles`);if(!response.ok)throw new Error('读取人物档案失败');return response.json();}
+export async function saveProfile(profile:CharacterProfile):Promise<CharacterProfile>{const response=await fetch(`${API_BASE}/api/profiles/${profile.subject}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:profile.displayName,categories:profile.categories})});if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'保存档案失败');return response.json();}
+export async function sendMessageFeedback(messageId:string,verdict:'like'|'dislike',reason=''):Promise<void>{const response=await fetch(`${API_BASE}/api/memory-feedback`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message_id:messageId,scene:'chat',verdict,reason})});if(!response.ok)throw new Error('反馈保存失败');}
 
 export async function loadMessages():Promise<Message[]> {
   const response=await fetch(`${API_BASE}/api/messages`);

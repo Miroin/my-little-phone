@@ -24,6 +24,7 @@ from .persona import build_system_prompt, detect_scene
 from .voice import build_router as build_voice_router
 from .proactive import build_router as build_proactive_router, install_proactive_schema
 from .notifications import build_router as build_notification_router
+from .profiles import build_router as build_profile_router, profile_prompt
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("MLP_DATABASE_PATH", ROOT / "data" / "little-phone.db"))
@@ -113,6 +114,7 @@ app.include_router(build_backup_router(db, now, new_id))
 app.include_router(build_voice_router(db, now, new_id, ROOT))
 app.include_router(build_proactive_router(db, now, new_id))
 app.include_router(build_notification_router(db, now, new_id))
+app.include_router(build_profile_router(db, now))
 
 
 class ChatRequest(BaseModel):
@@ -278,10 +280,12 @@ def prepare_chat(body: ChatRequest) -> tuple[dict, list[sqlite3.Row], list[tuple
             )
         recent = list(connection.execute("SELECT speaker,text FROM messages ORDER BY created_at DESC LIMIT 24"))[::-1]
         selected = retrieve_memories(connection, user["text"], 8)
+        profiles = profile_prompt(connection, now)
         legacy = [] if selected else connection.execute("SELECT category,text FROM memories WHERE active=1 ORDER BY created_at DESC LIMIT 8").fetchall()
     prompt_memories = [f"[{row['layer']}] {row['summary'] or row['content']}" for row, _ in selected]
     if not prompt_memories:
         prompt_memories = [f"[旧版/{item['category']}] {item['text']}" for item in legacy]
+    prompt_memories = [*profiles, *prompt_memories]
     scene = detect_scene(user["text"])
     payload = {
         "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
@@ -447,6 +451,12 @@ def create_feedback(body: FeedbackCreate) -> dict:
     feedback_id, timestamp = new_id(), now()
     with db() as connection:
         connection.execute("INSERT INTO memory_feedback VALUES(?,?,?,?,?,?)", (feedback_id, body.message_id, body.scene, body.verdict, body.reason.strip(), timestamp))
+        delta = 0.03 if body.verdict == "like" else -0.03
+        connection.execute(
+            """UPDATE memory_items SET confidence=MAX(0,MIN(1,confidence+?)),updated_at=?
+            WHERE layer IN ('sample','relationship') AND id IN (SELECT memory_id FROM memory_usage WHERE message_id=?)""",
+            (delta, timestamp, body.message_id),
+        )
     return {"id": feedback_id, **body.model_dump(), "createdAt": timestamp}
 
 
@@ -524,7 +534,8 @@ async def reply_in_call(call_id: str, body: CallReply) -> dict:
             raise HTTPException(status_code=404, detail="通话已经结束")
         turns = json.loads(call["turns_json"] or "[]")[-20:]
         selected = retrieve_memories(connection, body.text, 7)
-    memories = [f"[{row['layer']}] {row['summary'] or row['content']}" for row, _ in selected]
+        profiles = profile_prompt(connection, now)
+    memories = [*profiles, *[f"[{row['layer']}] {row['summary'] or row['content']}" for row, _ in selected]]
     scene = detect_scene(body.text)
     system = build_system_prompt(scene, memories) + "\n你们正在实时语音通话。说得自然、短一些，像真的电话口语；不要写动作括号、旁白、标签或舞台说明。"
     payload = {
@@ -621,6 +632,7 @@ async def chat(body: ChatRequest) -> dict:
         connection.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", (user["id"], user["speaker"], user["kind"], user["text"], user["createdAt"], None))
         recent = list(connection.execute("SELECT speaker,text FROM messages ORDER BY created_at DESC LIMIT 24"))[::-1]
         selected = retrieve_memories(connection, user["text"], 8)
+        profiles = profile_prompt(connection, now)
         legacy = [] if selected else connection.execute("SELECT category,text FROM memories WHERE active=1 ORDER BY created_at DESC LIMIT 8").fetchall()
 
     prompt_memories: list[str] = []
@@ -628,6 +640,7 @@ async def chat(body: ChatRequest) -> dict:
         prompt_memories = [f"[{row['layer']}] {row['summary'] or row['content']}" for row, _ in selected]
     elif legacy:
         prompt_memories = [f"[旧版/{item['category']}] {item['text']}" for item in legacy]
+    prompt_memories = [*profiles, *prompt_memories]
     scene = detect_scene(user["text"])
     system = build_system_prompt(scene, prompt_memories)
     payload = {

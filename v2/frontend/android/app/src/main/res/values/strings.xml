@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">沈砚的小手机</string>
+    <string name="title_activity_main">沈砚的小手机</string>
+    <string name="package_name">com.miroin.mylittlephone</string>
+    <string name="custom_url_scheme">com.miroin.mylittlephone</string>
+</resources>
