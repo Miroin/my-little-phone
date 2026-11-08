@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import Callable
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from pydantic import BaseModel, Field
+
+
+class CandidateSelection(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=200)
 
 
 def _timestamp(value: object) -> str | None:
@@ -107,6 +112,21 @@ def install_schema(connection: sqlite3.Connection) -> None:
             UNIQUE(conversation_id,ordinal)
         );
         CREATE INDEX IF NOT EXISTS idx_imported_messages_conversation ON imported_messages(conversation_id,ordinal);
+        CREATE TABLE IF NOT EXISTS memory_candidates(
+            id TEXT PRIMARY KEY,
+            batch_id TEXT NOT NULL REFERENCES import_batches(id) ON DELETE CASCADE,
+            conversation_id TEXT NOT NULL REFERENCES imported_conversations(id) ON DELETE CASCADE,
+            message_id TEXT NOT NULL REFERENCES imported_messages(id) ON DELETE CASCADE,
+            layer TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            evidence_text TEXT NOT NULL,
+            confidence REAL NOT NULL DEFAULT 0.45,
+            status TEXT NOT NULL DEFAULT 'pending',
+            source_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(batch_id,source_hash)
+        );
+        CREATE INDEX IF NOT EXISTS idx_candidates_batch ON memory_candidates(batch_id,status,layer,created_at);
         """
     )
 
@@ -239,5 +259,111 @@ def build_router(
                 (conversation_id, limit, offset),
             ).fetchall()
         return {"total": total, "offset": offset, "limit": limit, "items": [dict(row) for row in rows]}
+
+    @router.post("/{batch_id}/local-candidates")
+    def create_local_candidates(batch_id: str) -> dict:
+        patterns = [
+            ("plan", ("约好", "约定", "答应", "下次", "周末", "明天", "记得要")),
+            ("user", ("我喜欢", "我不喜欢", "我最喜欢", "我讨厌", "我习惯", "不能吃", "不吃", "我想要")),
+            ("event", ("我们一起", "那一次", "那次", "第一次", "之前我们", "还记得")),
+        ]
+        created = 0
+        timestamp = now()
+        with db_factory() as connection:
+            install_schema(connection)
+            if not connection.execute("SELECT 1 FROM import_batches WHERE id=? AND status='previewed'", (batch_id,)).fetchone():
+                raise HTTPException(status_code=404, detail="没有找到已经读取完成的导入批次")
+            conversations = connection.execute("SELECT id FROM imported_conversations WHERE batch_id=?", (batch_id,)).fetchall()
+            for conversation in conversations:
+                rows = connection.execute(
+                    "SELECT * FROM imported_messages WHERE conversation_id=? ORDER BY ordinal", (conversation["id"],)
+                ).fetchall()
+                per_conversation = 0
+                for row in rows:
+                    if row["speaker"] != "user":
+                        continue
+                    matched_layer = next((layer for layer, words in patterns if any(word in row["text"] for word in words)), None)
+                    if not matched_layer:
+                        continue
+                    following = next((item for item in rows if item["ordinal"] == row["ordinal"] + 1 and item["speaker"] == "assistant"), None)
+                    evidence = row["text"] + (("\n沈砚：" + following["text"]) if following else "")
+                    summary = row["text"].replace("\n", " ").strip()[:180]
+                    source_hash = hashlib.sha256(f"{matched_layer}\n{row['text']}".encode("utf-8")).hexdigest()
+                    cursor = connection.execute(
+                        "INSERT OR IGNORE INTO memory_candidates VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                        (new_id(), batch_id, conversation["id"], row["id"], matched_layer, summary, evidence, 0.45, "pending", source_hash, timestamp),
+                    )
+                    created += cursor.rowcount
+                    per_conversation += cursor.rowcount
+                    if per_conversation >= 3:
+                        break
+            totals = connection.execute(
+                "SELECT layer,COUNT(*) AS count FROM memory_candidates WHERE batch_id=? AND status='pending' GROUP BY layer",
+                (batch_id,),
+            ).fetchall()
+        return {"created": created, "counts": {row["layer"]: row["count"] for row in totals}}
+
+    @router.get("/{batch_id}/candidates")
+    def list_candidates(
+        batch_id: str,
+        status: str = Query(default="pending", pattern="^(pending|accepted|rejected)$"),
+        layer: str | None = Query(default=None, pattern="^(user|event|plan|sample)$"),
+        offset: int = Query(default=0, ge=0),
+        limit: int = Query(default=20, ge=1, le=50),
+    ) -> dict:
+        clauses, values = ["batch_id=?", "status=?"], [batch_id, status]
+        if layer:
+            clauses.append("layer=?")
+            values.append(layer)
+        where = " AND ".join(clauses)
+        with db_factory() as connection:
+            install_schema(connection)
+            total = connection.execute(f"SELECT COUNT(*) FROM memory_candidates WHERE {where}", values).fetchone()[0]
+            rows = connection.execute(
+                f"SELECT * FROM memory_candidates WHERE {where} ORDER BY created_at,id LIMIT ? OFFSET ?",
+                [*values, limit, offset],
+            ).fetchall()
+        return {"total": total, "offset": offset, "limit": limit, "items": [dict(row) for row in rows]}
+
+    @router.post("/{batch_id}/candidates/accept")
+    def accept_candidates(batch_id: str, body: CandidateSelection) -> dict:
+        accepted = 0
+        skipped = 0
+        timestamp = now()
+        placeholders = ",".join("?" for _ in body.ids)
+        with db_factory() as connection:
+            install_schema(connection)
+            rows = connection.execute(
+                f"SELECT * FROM memory_candidates WHERE batch_id=? AND status='pending' AND id IN ({placeholders})",
+                [batch_id, *body.ids],
+            ).fetchall()
+            for row in rows:
+                memory_id = new_id()
+                try:
+                    connection.execute(
+                        "INSERT INTO memory_items(id,layer,content,summary,status,importance,confidence,created_at,updated_at,source_type,source_id,source_hash,tags_json,embedding_status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (memory_id, row["layer"], row["summary"], row["summary"], "active", 5, row["confidence"], timestamp, timestamp, "history-local", row["id"], row["source_hash"], "[]", "pending"),
+                    )
+                    connection.execute(
+                        "INSERT INTO memory_evidence VALUES(?,?,?,?,?,?,?,?)",
+                        (new_id(), memory_id, row["conversation_id"], row["message_id"], row["message_id"], row["evidence_text"], hashlib.sha256(row["evidence_text"].encode("utf-8")).hexdigest(), timestamp),
+                    )
+                    connection.execute("UPDATE memory_candidates SET status='accepted' WHERE id=?", (row["id"],))
+                    accepted += 1
+                except sqlite3.IntegrityError:
+                    connection.execute("UPDATE memory_candidates SET status='accepted' WHERE id=?", (row["id"],))
+                    skipped += 1
+        return {"accepted": accepted, "skippedDuplicates": skipped}
+
+    @router.post("/{batch_id}/candidates/reject")
+    def reject_candidates(batch_id: str, body: CandidateSelection) -> dict:
+        placeholders = ",".join("?" for _ in body.ids)
+        with db_factory() as connection:
+            install_schema(connection)
+            cursor = connection.execute(
+                f"UPDATE memory_candidates SET status='rejected' WHERE batch_id=? AND status='pending' AND id IN ({placeholders})",
+                [batch_id, *body.ids],
+            )
+        return {"rejected": cursor.rowcount}
 
     return router

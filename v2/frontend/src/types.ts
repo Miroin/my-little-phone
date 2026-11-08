@@ -48,3 +48,12 @@ export interface ImportBatch {
   duplicate?: boolean;
   resumed?: boolean;
 }
+
+export interface MemoryCandidate {
+  id: string;
+  layer: 'user' | 'event' | 'plan' | 'sample';
+  summary: string;
+  evidence_text: string;
+  confidence: number;
+  status: 'pending' | 'accepted' | 'rejected';
+}
