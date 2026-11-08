@@ -178,3 +178,17 @@ export async function loadCalls():Promise<CallRecord[]>{
   if(!response.ok)throw new Error('读取通话记录失败');
   return response.json();
 }
+
+export async function answerCall(id:string):Promise<CallRecord>{
+  const response=await fetch(`${API_BASE}/api/calls/${id}/answer`,{method:'POST'});
+  if(!response.ok)throw new Error('接听失败');
+  return response.json();
+}
+
+export interface CompanionSettings {enabled:boolean;allow_calls:boolean;dnd_enabled:boolean;dnd_start:string;dnd_end:string;timezone:string}
+export async function loadCompanionSettings():Promise<CompanionSettings>{
+  const response=await fetch(`${API_BASE}/api/companion/settings`);if(!response.ok)throw new Error('读取主动陪伴设置失败');return response.json();
+}
+export async function saveCompanionSettings(settings:CompanionSettings):Promise<CompanionSettings>{
+  const response=await fetch(`${API_BASE}/api/companion/settings`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(settings)});if(!response.ok)throw new Error('保存主动陪伴设置失败');return response.json();
+}

@@ -22,6 +22,7 @@ from .backup import build_router as build_backup_router
 from .memory_extract import build_router as build_memory_extract_router
 from .persona import build_system_prompt, detect_scene
 from .voice import build_router as build_voice_router
+from .proactive import build_router as build_proactive_router, install_proactive_schema
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("MLP_DATABASE_PATH", ROOT / "data" / "little-phone.db"))
@@ -109,6 +110,7 @@ app.include_router(build_chat_import_router(db, now, new_id))
 app.include_router(build_memory_extract_router(db, now, new_id))
 app.include_router(build_backup_router(db, now, new_id))
 app.include_router(build_voice_router(db, now, new_id, ROOT))
+app.include_router(build_proactive_router(db, now, new_id))
 
 
 class ChatRequest(BaseModel):
@@ -254,6 +256,8 @@ def prepare_chat(body: ChatRequest) -> tuple[dict, list[sqlite3.Row], list[tuple
             user = {"id": new_id(), "speaker": "user", "kind": "text", "text": body.text.strip(), "createdAt": now(), "callId": None}
             scene = detect_scene(user["text"])
             connection.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", (user["id"], "user", "text", user["text"], user["createdAt"], None))
+            install_proactive_schema(connection, now)
+            connection.execute("UPDATE proactive_events SET status='answered',answered_at=? WHERE status='sent' AND answered_at IS NULL", (user["createdAt"],))
             connection.execute(
                 "INSERT INTO chat_runs(id,user_message_id,status,scene,created_at,updated_at) VALUES(?,?,?,?,?,?)",
                 (run_id, user["id"], "pending", scene.name, user["createdAt"], user["createdAt"]),
@@ -460,6 +464,17 @@ def add_call_turn(call_id: str, body: CallTurnCreate) -> dict:
         connection.execute("UPDATE calls SET turns_json=? WHERE id=?", (json.dumps(turns, ensure_ascii=False), call_id))
         connection.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", (message_id, body.speaker, "text", turn["text"], timestamp, call_id))
     return turn
+
+
+@app.post("/api/calls/{call_id}/answer")
+def answer_call(call_id: str) -> dict:
+    with db() as connection:
+        cursor = connection.execute("UPDATE calls SET status='active' WHERE id=? AND status='ringing'", (call_id,))
+        if not cursor.rowcount:
+            raise HTTPException(status_code=404, detail="来电不存在或已经处理")
+        connection.execute("UPDATE proactive_events SET status='answered',answered_at=? WHERE call_id=?", (now(), call_id))
+        row = connection.execute("SELECT * FROM calls WHERE id=?", (call_id,)).fetchone()
+    return {**dict(row), "turns": json.loads(row["turns_json"] or "[]")}
 
 
 @app.post("/api/calls/{call_id}/end")

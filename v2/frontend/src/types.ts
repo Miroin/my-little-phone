@@ -22,7 +22,7 @@ export interface CallTurn {
 export interface CallRecord {
   id: string;
   direction: 'incoming' | 'outgoing';
-  status: 'active' | 'answered' | 'missed' | 'declined';
+  status: 'ringing' | 'active' | 'answered' | 'missed' | 'declined';
   startedAt: string;
   endedAt?: string;
   durationSeconds: number;
