@@ -25,5 +25,15 @@ created = main.create_memory(main.MemoryCreate(
 assert created["layer"] == "relationship"
 assert main.memory_search("难过的时候陪陪我", 8)[0]["id"] == created["id"]
 assert len(main.memory_evidence(created["id"])) == 1
+assert main.cosine_similarity(main.ngrams("周末一起吃火锅"), main.ngrams("约好周末去吃火锅")) > 0.4
+updated = main.update_memory(created["id"], main.MemoryUpdate(
+    layer="relationship", content="陈钰难过时先陪她，不急着讲道理", summary="难过时先陪伴",
+    importance=9.5, confidence=0.9, tags=["安慰", "陪伴"],
+))
+assert updated["summary"] == "难过时先陪伴"
+reinforced = main.reinforce_memory(created["id"])
+assert abs(reinforced["confidence"] - 0.95) < 0.0001
+archived = main.update_memory_status(created["id"], main.MemoryStatusUpdate(status="archived"))
+assert archived["status"] == "archived"
 assert main.health()["memorySchema"] == 2
 print("memory smoke test passed")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import sqlite3
@@ -20,6 +21,7 @@ from .chat_import import build_router as build_chat_import_router
 from .backup import build_router as build_backup_router
 from .memory_extract import build_router as build_memory_extract_router
 from .persona import build_system_prompt, detect_scene
+from .voice import build_router as build_voice_router
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("MLP_DATABASE_PATH", ROOT / "data" / "little-phone.db"))
@@ -106,6 +108,7 @@ def db() -> sqlite3.Connection:
 app.include_router(build_chat_import_router(db, now, new_id))
 app.include_router(build_memory_extract_router(db, now, new_id))
 app.include_router(build_backup_router(db, now, new_id))
+app.include_router(build_voice_router(db, now, new_id, ROOT))
 
 
 class ChatRequest(BaseModel):
@@ -133,6 +136,15 @@ class MemoryStatusUpdate(BaseModel):
     status: MemoryStatus
 
 
+class MemoryUpdate(BaseModel):
+    layer: MemoryLayer
+    content: str = Field(min_length=1, max_length=12000)
+    summary: str = Field(default="", max_length=2000)
+    importance: float = Field(default=5, ge=0, le=10)
+    confidence: float = Field(default=0.5, ge=0, le=1)
+    tags: list[str] = Field(default_factory=list, max_length=30)
+
+
 class MemoryJobCreate(BaseModel):
     job_type: Literal["import", "extract", "embed", "merge", "backup"]
     payload: dict = Field(default_factory=dict)
@@ -145,8 +157,25 @@ class FeedbackCreate(BaseModel):
     reason: str = Field(default="", max_length=1000)
 
 
+class CallStart(BaseModel):
+    direction: Literal["incoming", "outgoing"] = "outgoing"
+
+
+class CallTurnCreate(BaseModel):
+    speaker: Literal["user", "assistant"]
+    text: str = Field(min_length=1, max_length=4000)
+
+
+class CallEnd(BaseModel):
+    status: Literal["answered", "missed", "declined"] = "answered"
+
+
 def message_dict(row: sqlite3.Row) -> dict:
-    return {"id": row["id"], "speaker": row["speaker"], "kind": row["kind"], "text": row["text"], "createdAt": row["created_at"], "callId": row["call_id"]}
+    result = {"id": row["id"], "speaker": row["speaker"], "kind": row["kind"], "text": row["text"], "createdAt": row["created_at"], "callId": row["call_id"]}
+    keys = row.keys()
+    if "audio_id" in keys and row["audio_id"]:
+        result.update({"audioUrl": f"/api/voice/assets/{row['audio_id']}/audio", "durationMs": row["duration_ms"], "voiceStatus": row["voice_status"]})
+    return result
 
 
 def memory_dict(row: sqlite3.Row) -> dict:
@@ -169,8 +198,27 @@ def query_terms(value: str) -> set[str]:
     return {term for term in [*latin, *chinese, *pairs] if term.strip()}
 
 
+def ngrams(value: str, size: int = 2) -> dict[str, int]:
+    compact = re.sub(r"\s+", "", value.lower())
+    grams: dict[str, int] = {}
+    for index in range(max(0, len(compact) - size + 1)):
+        gram = compact[index:index + size]
+        grams[gram] = grams.get(gram, 0) + 1
+    return grams
+
+
+def cosine_similarity(left: dict[str, int], right: dict[str, int]) -> float:
+    if not left or not right:
+        return 0
+    dot = sum(value * right.get(key, 0) for key, value in left.items())
+    left_norm = math.sqrt(sum(value * value for value in left.values()))
+    right_norm = math.sqrt(sum(value * value for value in right.values()))
+    return dot / (left_norm * right_norm) if left_norm and right_norm else 0
+
+
 def retrieve_memories(connection: sqlite3.Connection, query: str, limit: int = 8) -> list[tuple[sqlite3.Row, float]]:
     terms = query_terms(query)
+    query_grams = ngrams(query)
     rows = connection.execute(
         "SELECT * FROM memory_items WHERE status='active' ORDER BY importance DESC,COALESCE(last_reinforced_at,occurred_at,created_at) DESC LIMIT 250"
     ).fetchall()
@@ -178,9 +226,10 @@ def retrieve_memories(connection: sqlite3.Connection, query: str, limit: int = 8
     for row in rows:
         haystack = " ".join((row["content"], row["summary"], row["tags_json"])).lower()
         overlap = sum(1 for term in terms if term in haystack)
+        semantic = cosine_similarity(query_grams, ngrams(haystack))
         layer_bonus = 2.5 if row["layer"] in {"personality", "relationship"} else 0
-        score = overlap * 4 + float(row["importance"]) * 0.55 + float(row["confidence"]) + layer_bonus
-        if overlap or row["layer"] in {"personality", "relationship"}:
+        score = overlap * 3.2 + semantic * 9 + float(row["importance"]) * 0.55 + float(row["confidence"]) + layer_bonus
+        if overlap or semantic >= 0.12 or row["layer"] in {"personality", "relationship"}:
             scored.append((row, score))
     scored.sort(key=lambda item: item[1], reverse=True)
     return scored[:limit]
@@ -252,7 +301,15 @@ def health() -> dict:
 @app.get("/api/messages")
 def messages() -> list[dict]:
     with db() as connection:
-        return [message_dict(row) for row in connection.execute("SELECT * FROM messages ORDER BY created_at ASC LIMIT 500")]
+        connection.execute("""CREATE TABLE IF NOT EXISTS audio_assets(
+        id TEXT PRIMARY KEY,message_id TEXT NOT NULL UNIQUE,path TEXT NOT NULL,mime_type TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL DEFAULT 0,transcript TEXT NOT NULL,status TEXT NOT NULL,error TEXT,
+        created_at TEXT NOT NULL,updated_at TEXT NOT NULL)""")
+        rows = connection.execute(
+            """SELECT m.*,a.id audio_id,a.duration_ms,a.status voice_status FROM messages m
+            LEFT JOIN audio_assets a ON a.message_id=m.id ORDER BY m.created_at ASC LIMIT 500"""
+        ).fetchall()
+        return [message_dict(row) for row in rows]
 
 
 @app.get("/api/memories")
@@ -300,6 +357,39 @@ def update_memory_status(memory_id: str, body: MemoryStatusUpdate) -> dict:
     return memory_dict(row)
 
 
+@app.put("/api/memories/{memory_id}")
+def update_memory(memory_id: str, body: MemoryUpdate) -> dict:
+    normalized, timestamp = body.content.strip(), now()
+    try:
+        with db() as connection:
+            cursor = connection.execute(
+                """UPDATE memory_items SET layer=?,content=?,summary=?,importance=?,confidence=?,tags_json=?,
+                source_hash=?,updated_at=? WHERE id=? AND status!='deleted'""",
+                (body.layer, normalized, body.summary.strip(), body.importance, body.confidence,
+                 json.dumps(body.tags, ensure_ascii=False), content_hash(normalized), timestamp, memory_id),
+            )
+            if not cursor.rowcount:
+                raise HTTPException(status_code=404, detail="没有找到这条记忆")
+            row = connection.execute("SELECT * FROM memory_items WHERE id=?", (memory_id,)).fetchone()
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="修改后的内容与现有记忆重复") from exc
+    return memory_dict(row)
+
+
+@app.post("/api/memories/{memory_id}/reinforce")
+def reinforce_memory(memory_id: str) -> dict:
+    timestamp = now()
+    with db() as connection:
+        cursor = connection.execute(
+            "UPDATE memory_items SET last_reinforced_at=?,confidence=MIN(1,confidence+0.05),updated_at=? WHERE id=? AND status='active'",
+            (timestamp, timestamp, memory_id),
+        )
+        if not cursor.rowcount:
+            raise HTTPException(status_code=404, detail="只有正在使用的记忆可以加强")
+        row = connection.execute("SELECT * FROM memory_items WHERE id=?", (memory_id,)).fetchone()
+    return memory_dict(row)
+
+
 @app.get("/api/memories/{memory_id}/evidence")
 def memory_evidence(memory_id: str) -> list[dict]:
     with db() as connection:
@@ -340,6 +430,55 @@ def create_feedback(body: FeedbackCreate) -> dict:
     with db() as connection:
         connection.execute("INSERT INTO memory_feedback VALUES(?,?,?,?,?,?)", (feedback_id, body.message_id, body.scene, body.verdict, body.reason.strip(), timestamp))
     return {"id": feedback_id, **body.model_dump(), "createdAt": timestamp}
+
+
+@app.get("/api/calls")
+def list_calls(limit: int = Query(default=50, ge=1, le=200)) -> list[dict]:
+    with db() as connection:
+        rows = connection.execute("SELECT * FROM calls ORDER BY started_at DESC LIMIT ?", (limit,)).fetchall()
+    return [{**dict(row), "turns": json.loads(row["turns_json"] or "[]")} for row in rows]
+
+
+@app.post("/api/calls", status_code=201)
+def start_call(body: CallStart) -> dict:
+    call_id, timestamp = new_id(), now()
+    with db() as connection:
+        connection.execute("INSERT INTO calls VALUES(?,?,?,?,?,?,?)", (call_id, body.direction, "active", timestamp, None, 0, "[]"))
+    return {"id": call_id, "direction": body.direction, "status": "active", "startedAt": timestamp, "durationSeconds": 0, "turns": []}
+
+
+@app.post("/api/calls/{call_id}/turns", status_code=201)
+def add_call_turn(call_id: str, body: CallTurnCreate) -> dict:
+    timestamp, message_id = now(), new_id()
+    turn = {"speaker": body.speaker, "text": body.text.strip(), "createdAt": timestamp, "messageId": message_id}
+    with db() as connection:
+        row = connection.execute("SELECT * FROM calls WHERE id=? AND status='active'", (call_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="通话不存在或已经结束")
+        turns = json.loads(row["turns_json"] or "[]")
+        turns.append(turn)
+        connection.execute("UPDATE calls SET turns_json=? WHERE id=?", (json.dumps(turns, ensure_ascii=False), call_id))
+        connection.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", (message_id, body.speaker, "text", turn["text"], timestamp, call_id))
+    return turn
+
+
+@app.post("/api/calls/{call_id}/end")
+def end_call(call_id: str, body: CallEnd) -> dict:
+    ended = datetime.now(timezone.utc)
+    with db() as connection:
+        row = connection.execute("SELECT * FROM calls WHERE id=?", (call_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="没有找到这次通话")
+        if row["status"] != "active":
+            return {**dict(row), "turns": json.loads(row["turns_json"] or "[]")}
+        started = datetime.fromisoformat(row["started_at"])
+        duration = max(0, int((ended - started).total_seconds())) if body.status == "answered" else 0
+        connection.execute("UPDATE calls SET status=?,ended_at=?,duration_seconds=? WHERE id=?", (body.status, ended.isoformat(), duration, call_id))
+        label = "通话" if body.status == "answered" else ("未接来电" if body.status == "missed" else "已拒绝来电")
+        event_text = f"{label} · {duration // 60:02d}:{duration % 60:02d}" if duration else label
+        connection.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", (new_id(), "assistant", "call_event", event_text, ended.isoformat(), call_id))
+        updated = connection.execute("SELECT * FROM calls WHERE id=?", (call_id,)).fetchone()
+    return {**dict(updated), "turns": json.loads(updated["turns_json"] or "[]")}
 
 
 @app.post("/api/chat/stream")

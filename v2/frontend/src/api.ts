@@ -1,11 +1,19 @@
-import type { ExtractionJob,ImportBatch,IntegrityReport,Memory,MemoryCandidate,Message,RestorePreview } from './types';
+import type { CallRecord,ExtractionJob,ImportBatch,IntegrityReport,Memory,MemoryCandidate,Message,RestorePreview } from './types';
 
 const API_BASE=(import.meta.env.VITE_API_BASE_URL||'http://127.0.0.1:8000').replace(/\/$/,'');
 
 export async function loadMessages():Promise<Message[]> {
   const response=await fetch(`${API_BASE}/api/messages`);
   if(!response.ok) throw new Error('读取聊天失败');
-  return response.json();
+  const items:Message[]=await response.json();
+  return items.map(message=>message.audioUrl?{...message,audioUrl:`${API_BASE}${message.audioUrl}`}:message);
+}
+
+export async function synthesizeVoice(messageId:string):Promise<{audioUrl:string;duration_ms:number;transcript:string}>{
+  const response=await fetch(`${API_BASE}/api/voice/messages/${messageId}`,{method:'POST'});
+  if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'语音生成失败');
+  const result=await response.json();
+  return {...result,audioUrl:`${API_BASE}${result.audioUrl}`};
 }
 
 type StreamHandlers={
@@ -43,6 +51,24 @@ export async function streamMessage(text:string,requestId:string,signal:AbortSig
 export async function loadMemories():Promise<Memory[]> {
   const response=await fetch(`${API_BASE}/api/memories?limit=100`);
   if(!response.ok) throw new Error('读取记忆失败');
+  return response.json();
+}
+
+export async function updateMemory(memory:Memory):Promise<Memory>{
+  const response=await fetch(`${API_BASE}/api/memories/${memory.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({layer:memory.layer,content:memory.content,summary:memory.summary,importance:memory.importance,confidence:memory.confidence,tags:memory.tags})});
+  if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'记忆修改失败');
+  return response.json();
+}
+
+export async function setMemoryStatus(id:string,status:Memory['status']):Promise<Memory>{
+  const response=await fetch(`${API_BASE}/api/memories/${id}/status`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
+  if(!response.ok)throw new Error('记忆状态修改失败');
+  return response.json();
+}
+
+export async function reinforceMemory(id:string):Promise<Memory>{
+  const response=await fetch(`${API_BASE}/api/memories/${id}/reinforce`,{method:'POST'});
+  if(!response.ok)throw new Error('记忆加强失败');
   return response.json();
 }
 
@@ -132,5 +158,23 @@ export async function controlExtractionJob(batchId:string,jobId:string,action:'p
 export async function runExtractionStep(batchId:string,jobId:string):Promise<{job:ExtractionJob;created:number;failed:number;complete:boolean}>{
   const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/deepseek-candidates?max_conversations=3&job_id=${jobId}`,{method:'POST'});
   if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'精提取暂停');
+  return response.json();
+}
+
+export async function startCall(direction:'incoming'|'outgoing'='outgoing'):Promise<CallRecord>{
+  const response=await fetch(`${API_BASE}/api/calls`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({direction})});
+  if(!response.ok)throw new Error('通话建立失败');
+  return response.json();
+}
+
+export async function endCall(id:string,status:'answered'|'missed'|'declined'='answered'):Promise<CallRecord>{
+  const response=await fetch(`${API_BASE}/api/calls/${id}/end`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
+  if(!response.ok)throw new Error('挂断失败');
+  return response.json();
+}
+
+export async function loadCalls():Promise<CallRecord[]>{
+  const response=await fetch(`${API_BASE}/api/calls`);
+  if(!response.ok)throw new Error('读取通话记录失败');
   return response.json();
 }

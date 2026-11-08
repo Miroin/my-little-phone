@@ -8,6 +8,9 @@ export interface Message {
   text: string;
   createdAt: string;
   callId?: string;
+  audioUrl?: string;
+  durationMs?: number;
+  voiceStatus?: 'generating'|'ready'|'failed';
 }
 
 export interface CallTurn {
@@ -19,7 +22,7 @@ export interface CallTurn {
 export interface CallRecord {
   id: string;
   direction: 'incoming' | 'outgoing';
-  status: 'answered' | 'missed' | 'declined';
+  status: 'active' | 'answered' | 'missed' | 'declined';
   startedAt: string;
   endedAt?: string;
   durationSeconds: number;
