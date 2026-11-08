@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 
 db_path = Path(__file__).parent / "data" / "test-memory.db"
+if db_path.exists():
+    db_path.unlink()
 os.environ["MLP_DATABASE_PATH"] = str(db_path)
 
 from app import main

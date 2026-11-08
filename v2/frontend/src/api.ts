@@ -8,10 +8,36 @@ export async function loadMessages():Promise<Message[]> {
   return response.json();
 }
 
-export async function sendMessage(text:string):Promise<{user:Message;assistant:Message}> {
-  const response=await fetch(`${API_BASE}/api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+type StreamHandlers={
+  onMeta:(data:{requestId:string;user:Message;memoryIds:string[]})=>void;
+  onDelta:(text:string)=>void;
+  onDone:(data:{assistant:Message;scene:string})=>void;
+};
+
+export async function streamMessage(text:string,requestId:string,signal:AbortSignal,handlers:StreamHandlers):Promise<void>{
+  const response=await fetch(`${API_BASE}/api/chat/stream`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,request_id:requestId}),signal});
   if(!response.ok) throw new Error((await response.json().catch(()=>null))?.detail||'发送失败');
-  return response.json();
+  if(!response.body) throw new Error('当前浏览器不能读取流式回复');
+  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
+  const dispatch=(block:string)=>{
+    const lines=block.split('\n');
+    const event=lines.find(line=>line.startsWith('event:'))?.slice(6).trim();
+    const raw=lines.filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trim()).join('');
+    if(!event||!raw)return;
+    const data=JSON.parse(raw);
+    if(event==='meta')handlers.onMeta(data);
+    if(event==='delta')handlers.onDelta(data.text||'');
+    if(event==='done')handlers.onDone(data);
+    if(event==='error')throw new Error(data.message||'回复中断');
+  };
+  while(true){
+    const {done,value}=await reader.read();
+    buffer+=decoder.decode(value||new Uint8Array(),{stream:!done}).replace(/\r\n/g,'\n');
+    let boundary=buffer.indexOf('\n\n');
+    while(boundary>=0){dispatch(buffer.slice(0,boundary));buffer=buffer.slice(boundary+2);boundary=buffer.indexOf('\n\n');}
+    if(done)break;
+  }
+  if(buffer.trim())dispatch(buffer);
 }
 
 export async function loadMemories():Promise<Memory[]> {

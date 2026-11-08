@@ -11,8 +11,9 @@ from pathlib import Path
 from typing import Literal
 
 import httpx
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from .chat_import import build_router as build_chat_import_router
@@ -57,6 +58,12 @@ def db() -> sqlite3.Connection:
         CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY,speaker TEXT NOT NULL,kind TEXT NOT NULL,text TEXT NOT NULL,created_at TEXT NOT NULL,call_id TEXT);
         CREATE TABLE IF NOT EXISTS memories(id TEXT PRIMARY KEY,category TEXT NOT NULL,text TEXT NOT NULL,created_at TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1);
         CREATE TABLE IF NOT EXISTS calls(id TEXT PRIMARY KEY,direction TEXT NOT NULL,status TEXT NOT NULL,started_at TEXT NOT NULL,ended_at TEXT,duration_seconds INTEGER NOT NULL DEFAULT 0,turns_json TEXT NOT NULL DEFAULT '[]');
+        CREATE TABLE IF NOT EXISTS chat_runs(
+            id TEXT PRIMARY KEY, user_message_id TEXT NOT NULL, assistant_message_id TEXT,
+            status TEXT NOT NULL DEFAULT 'pending', scene TEXT NOT NULL DEFAULT 'daily',
+            memory_ids_json TEXT NOT NULL DEFAULT '[]', error TEXT,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        );
 
         CREATE TABLE IF NOT EXISTS memory_items(
             id TEXT PRIMARY KEY, layer TEXT NOT NULL, content TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '',
@@ -101,6 +108,7 @@ app.include_router(build_memory_extract_router(db, now, new_id))
 
 class ChatRequest(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
+    request_id: str | None = Field(default=None, min_length=8, max_length=100)
 
 
 class MemoryCreate(BaseModel):
@@ -174,6 +182,62 @@ def retrieve_memories(connection: sqlite3.Connection, query: str, limit: int = 8
             scored.append((row, score))
     scored.sort(key=lambda item: item[1], reverse=True)
     return scored[:limit]
+
+
+def sse(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def prepare_chat(body: ChatRequest) -> tuple[dict, list[sqlite3.Row], list[tuple[sqlite3.Row, float]], object, str, str]:
+    run_id = body.request_id or new_id()
+    with db() as connection:
+        existing = connection.execute("SELECT * FROM chat_runs WHERE id=?", (run_id,)).fetchone()
+        if existing and existing["status"] == "complete" and existing["assistant_message_id"]:
+            user_row = connection.execute("SELECT * FROM messages WHERE id=?", (existing["user_message_id"],)).fetchone()
+            assistant_row = connection.execute("SELECT * FROM messages WHERE id=?", (existing["assistant_message_id"],)).fetchone()
+            return message_dict(user_row), [], [], None, run_id, message_dict(assistant_row)["text"]
+        if existing:
+            user_row = connection.execute("SELECT * FROM messages WHERE id=?", (existing["user_message_id"],)).fetchone()
+            user = message_dict(user_row)
+        else:
+            user = {"id": new_id(), "speaker": "user", "kind": "text", "text": body.text.strip(), "createdAt": now(), "callId": None}
+            scene = detect_scene(user["text"])
+            connection.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", (user["id"], "user", "text", user["text"], user["createdAt"], None))
+            connection.execute(
+                "INSERT INTO chat_runs(id,user_message_id,status,scene,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+                (run_id, user["id"], "pending", scene.name, user["createdAt"], user["createdAt"]),
+            )
+        recent = list(connection.execute("SELECT speaker,text FROM messages ORDER BY created_at DESC LIMIT 24"))[::-1]
+        selected = retrieve_memories(connection, user["text"], 8)
+        legacy = [] if selected else connection.execute("SELECT category,text FROM memories WHERE active=1 ORDER BY created_at DESC LIMIT 8").fetchall()
+    prompt_memories = [f"[{row['layer']}] {row['summary'] or row['content']}" for row, _ in selected]
+    if not prompt_memories:
+        prompt_memories = [f"[旧版/{item['category']}] {item['text']}" for item in legacy]
+    scene = detect_scene(user["text"])
+    payload = {
+        "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+        "messages": [{"role": "system", "content": build_system_prompt(scene, prompt_memories)}, *[
+            {"role": "assistant" if item["speaker"] == "assistant" else "user", "content": item["text"]} for item in recent
+        ]],
+        "temperature": 0.8,
+        "stream": True,
+    }
+    with db() as connection:
+        connection.execute(
+            "UPDATE chat_runs SET status='streaming',scene=?,memory_ids_json=?,error=NULL,updated_at=? WHERE id=?",
+            (scene.name, json.dumps([row["id"] for row, _ in selected]), now(), run_id),
+        )
+    return user, recent, selected, payload, run_id, ""
+
+
+def finish_chat(run_id: str, answer: str, selected: list[tuple[sqlite3.Row, float]]) -> dict:
+    assistant = {"id": new_id(), "speaker": "assistant", "kind": "text", "text": answer.strip(), "createdAt": now(), "callId": None}
+    with db() as connection:
+        connection.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", (assistant["id"], "assistant", "text", assistant["text"], assistant["createdAt"], None))
+        connection.execute("UPDATE chat_runs SET assistant_message_id=?,status='complete',updated_at=? WHERE id=?", (assistant["id"], now(), run_id))
+        for rank, (row, score) in enumerate(selected, start=1):
+            connection.execute("INSERT OR IGNORE INTO memory_usage VALUES(?,?,?,?,?)", (assistant["id"], row["id"], rank, score, now()))
+    return assistant
 
 
 @app.get("/health")
@@ -274,6 +338,67 @@ def create_feedback(body: FeedbackCreate) -> dict:
     with db() as connection:
         connection.execute("INSERT INTO memory_feedback VALUES(?,?,?,?,?,?)", (feedback_id, body.message_id, body.scene, body.verdict, body.reason.strip(), timestamp))
     return {"id": feedback_id, **body.model_dump(), "createdAt": timestamp}
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(body: ChatRequest, request: Request) -> StreamingResponse:
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="服务端尚未配置 DeepSeek API Key")
+    user, _, selected, payload, run_id, cached_answer = prepare_chat(body)
+
+    async def generate():
+        completed = False
+        try:
+            yield sse("meta", {"requestId": run_id, "user": user, "memoryIds": [row["id"] for row, _ in selected]})
+            if cached_answer:
+                with db() as connection:
+                    run = connection.execute("SELECT assistant_message_id,scene FROM chat_runs WHERE id=?", (run_id,)).fetchone()
+                    assistant = message_dict(connection.execute("SELECT * FROM messages WHERE id=?", (run["assistant_message_id"],)).fetchone())
+                yield sse("delta", {"text": cached_answer})
+                yield sse("done", {"assistant": assistant, "scene": run["scene"]})
+                return
+            answer = ""
+            async with httpx.AsyncClient(timeout=httpx.Timeout(90, connect=15)) as client:
+                async with client.stream(
+                    "POST",
+                    os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/chat/completions"),
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json=payload,
+                ) as response:
+                    if response.is_error:
+                        await response.aread()
+                        raise RuntimeError(f"model_http_{response.status_code}")
+                    async for line in response.aiter_lines():
+                        if await request.is_disconnected():
+                            return
+                        if not line.startswith("data:"):
+                            continue
+                        raw = line[5:].strip()
+                        if raw == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(raw)["choices"][0]["delta"].get("content", "")
+                        except (KeyError, IndexError, TypeError, json.JSONDecodeError):
+                            continue
+                        if chunk:
+                            answer += chunk
+                            yield sse("delta", {"text": chunk})
+            if not answer.strip():
+                raise RuntimeError("empty_model_response")
+            assistant = finish_chat(run_id, answer, selected)
+            completed = True
+            yield sse("done", {"assistant": assistant, "scene": detect_scene(user["text"]).name})
+        except Exception:
+            with db() as connection:
+                connection.execute("UPDATE chat_runs SET status='failed',error=?,updated_at=? WHERE id=?", ("模型服务暂时不可用", now(), run_id))
+            yield sse("error", {"message": "回复中断了，可以原样重试，不会重复保存消息。"})
+        finally:
+            if not completed and not cached_answer:
+                with db() as connection:
+                    connection.execute("UPDATE chat_runs SET status=CASE WHEN status='failed' THEN status ELSE 'interrupted' END,updated_at=? WHERE id=?", (now(), run_id))
+
+    return StreamingResponse(generate(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.post("/api/chat")
