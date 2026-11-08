@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .chat_import import build_router as build_chat_import_router
+from .memory_extract import build_router as build_memory_extract_router
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("MLP_DATABASE_PATH", ROOT / "data" / "little-phone.db"))
@@ -94,6 +95,7 @@ def db() -> sqlite3.Connection:
 
 
 app.include_router(build_chat_import_router(db, now, new_id))
+app.include_router(build_memory_extract_router(db, now, new_id))
 
 
 class ChatRequest(BaseModel):

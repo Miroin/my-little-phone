@@ -51,7 +51,7 @@ export interface ImportBatch {
 
 export interface MemoryCandidate {
   id: string;
-  layer: 'user' | 'event' | 'plan' | 'sample';
+  layer: 'relationship' | 'user' | 'event' | 'feeling' | 'plan' | 'sample';
   summary: string;
   evidence_text: string;
   confidence: number;
