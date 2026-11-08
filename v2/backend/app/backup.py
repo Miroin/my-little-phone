@@ -20,6 +20,7 @@ BACKUP_TABLES = (
     "companion_settings", "proactive_events",
     "life_notes", "media_assets",
 )
+BACKUP_MAX_BYTES = max(1, int(os.getenv("MLP_BACKUP_MAX_MB", "512"))) * 1024 * 1024
 
 
 class RestoreConfirm(BaseModel):
@@ -78,10 +79,10 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
 
     @router.post("/restore-preview", status_code=201)
     async def preview_restore(file: UploadFile = File(...)) -> dict:
-        raw = await file.read(100 * 1024 * 1024 + 1)
+        raw = await file.read(BACKUP_MAX_BYTES + 1)
         await file.close()
-        if len(raw) > 100 * 1024 * 1024:
-            raise HTTPException(status_code=413, detail="备份文件超过 100MB")
+        if len(raw) > BACKUP_MAX_BYTES:
+            raise HTTPException(status_code=413, detail=f"备份文件超过 {BACKUP_MAX_BYTES // 1024 // 1024}MB")
         try:
             envelope = json.loads(raw.decode("utf-8-sig"))
             payload = envelope["payload"]

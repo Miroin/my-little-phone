@@ -370,7 +370,7 @@ def messages() -> list[dict]:
 
 
 @app.get("/api/memories")
-def memories(status: MemoryStatus | None = None, layer: MemoryLayer | None = None, limit: int = Query(default=100, ge=1, le=500)) -> list[dict]:
+def memories(status: MemoryStatus | None = None, layer: MemoryLayer | None = None, limit: int = Query(default=100, ge=1, le=500), offset: int = Query(default=0, ge=0)) -> list[dict]:
     clauses = ["status!='deleted'"]
     values: list[object] = []
     if status:
@@ -379,9 +379,9 @@ def memories(status: MemoryStatus | None = None, layer: MemoryLayer | None = Non
     if layer:
         clauses.append("layer=?")
         values.append(layer)
-    values.append(limit)
+    values.extend((limit, offset))
     with db() as connection:
-        rows = connection.execute(f"SELECT * FROM memory_items WHERE {' AND '.join(clauses)} ORDER BY updated_at DESC LIMIT ?", values).fetchall()
+        rows = connection.execute(f"SELECT * FROM memory_items WHERE {' AND '.join(clauses)} ORDER BY updated_at DESC LIMIT ? OFFSET ?", values).fetchall()
     return [memory_dict(row) for row in rows]
 
 

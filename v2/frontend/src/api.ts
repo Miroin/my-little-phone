@@ -10,7 +10,8 @@ async function apiFetch(input:RequestInfo|URL,init:RequestInit={}):Promise<Respo
   if(token)headers.set('X-MLP-Access-Token',token);
   return window.fetch(input,{...init,headers});
 }
-async function assetObjectUrl(path:string):Promise<string>{const response=await apiFetch(`${API_BASE}${path}`);if(!response.ok)throw new Error('读取媒体失败');return URL.createObjectURL(await response.blob());}
+const assetCache=new Map<string,string>();
+async function assetObjectUrl(path:string):Promise<string>{const cached=assetCache.get(path);if(cached)return cached;const response=await apiFetch(`${API_BASE}${path}`);if(!response.ok)throw new Error('读取媒体失败');const url=URL.createObjectURL(await response.blob());assetCache.set(path,url);return url;}
 export async function checkBackend():Promise<{ok:boolean;modelConfigured:boolean;memoryCount:number}>{const health=await window.fetch(`${API_BASE}/health`);if(!health.ok)throw new Error('后端连接失败');const response=await apiFetch(`${API_BASE}/api/session`);if(!response.ok)throw new Error(response.status===401?'服务访问口令不正确':'后端连接失败');return health.json();}
 export interface CharacterProfile{subject:'shenyan'|'user';displayName:string;categories:Record<'identity'|'appearance'|'personality'|'relationship'|'habits'|'life',string>;updatedAt:string}
 export async function loadProfiles():Promise<CharacterProfile[]>{const response=await apiFetch(`${API_BASE}/api/profiles`);if(!response.ok)throw new Error('读取人物档案失败');return response.json();}
@@ -72,9 +73,13 @@ export async function streamMessage(text:string,requestId:string,signal:AbortSig
 }
 
 export async function loadMemories():Promise<Memory[]> {
-  const response=await apiFetch(`${API_BASE}/api/memories?limit=100`);
-  if(!response.ok) throw new Error('读取记忆失败');
-  return response.json();
+  const all:Memory[]=[];
+  for(let offset=0;;offset+=500){
+    const response=await apiFetch(`${API_BASE}/api/memories?limit=500&offset=${offset}`);
+    if(!response.ok) throw new Error('读取记忆失败');
+    const page:Memory[]=await response.json();all.push(...page);
+    if(page.length<500)return all;
+  }
 }
 
 export async function updateMemory(memory:Memory):Promise<Memory>{
