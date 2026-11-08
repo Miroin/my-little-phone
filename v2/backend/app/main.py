@@ -17,15 +17,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from .chat_import import build_router as build_chat_import_router
+from .chat_import import build_router as build_chat_import_router, install_schema as install_import_schema
 from .backup import build_router as build_backup_router
-from .memory_extract import build_router as build_memory_extract_router
+from .memory_extract import build_router as build_memory_extract_router, install_extraction_schema
 from .persona import build_system_prompt, detect_scene
-from .voice import build_router as build_voice_router
+from .voice import build_router as build_voice_router, install_voice_schema
 from .proactive import build_router as build_proactive_router, install_proactive_schema
-from .notifications import build_router as build_notification_router
-from .profiles import build_router as build_profile_router, profile_prompt
-from .life import build_router as build_life_router
+from .notifications import build_router as build_notification_router, install_notification_schema
+from .profiles import build_router as build_profile_router, install_profile_schema, profile_prompt
+from .life import build_router as build_life_router, install_life_schema
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("MLP_DATABASE_PATH", ROOT / "data" / "little-phone.db"))
@@ -106,6 +106,13 @@ def db() -> sqlite3.Connection:
         );
         """
     )
+    install_import_schema(connection)
+    install_extraction_schema(connection)
+    install_voice_schema(connection)
+    install_proactive_schema(connection, now, seed=False)
+    install_notification_schema(connection)
+    install_profile_schema(connection, now, seed=False)
+    install_life_schema(connection)
     return connection
 
 

@@ -1,4 +1,5 @@
 __pycache__/
 *.py[cod]
-v2/backend/data/*.db
+v2/backend/data/
+v2/backend/pytest-cache-files-*/
 v2/frontend/dist/

@@ -13,7 +13,7 @@ tables = [row[0] for row in connection.execute(
     "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'memory_%' ORDER BY name"
 )]
 connection.close()
-assert tables == ["memory_evidence", "memory_feedback", "memory_items", "memory_jobs", "memory_usage"]
+assert {"memory_evidence", "memory_feedback", "memory_items", "memory_jobs", "memory_usage"}.issubset(tables)
 
 created = main.create_memory(main.MemoryCreate(
     layer="relationship",

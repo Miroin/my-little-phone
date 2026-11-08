@@ -16,14 +16,15 @@ class ProfileUpdate(BaseModel):
     categories: dict[str, str]
 
 
-def install_profile_schema(connection: sqlite3.Connection, now: Callable[[], str]) -> None:
+def install_profile_schema(connection: sqlite3.Connection, now: Callable[[], str], seed: bool = True) -> None:
     connection.execute(
         """CREATE TABLE IF NOT EXISTS character_profiles(
         subject TEXT PRIMARY KEY,display_name TEXT NOT NULL,categories_json TEXT NOT NULL,updated_at TEXT NOT NULL)"""
     )
-    empty = json.dumps({key: "" for key in PROFILE_CATEGORIES}, ensure_ascii=False)
-    connection.execute("INSERT OR IGNORE INTO character_profiles VALUES('shenyan','沈砚',?,?)", (empty, now()))
-    connection.execute("INSERT OR IGNORE INTO character_profiles VALUES('user','陈钰',?,?)", (empty, now()))
+    if seed:
+        empty = json.dumps({key: "" for key in PROFILE_CATEGORIES}, ensure_ascii=False)
+        connection.execute("INSERT OR IGNORE INTO character_profiles VALUES('shenyan','沈砚',?,?)", (empty, now()))
+        connection.execute("INSERT OR IGNORE INTO character_profiles VALUES('user','陈钰',?,?)", (empty, now()))
 
 
 def profile_dict(row: sqlite3.Row) -> dict:

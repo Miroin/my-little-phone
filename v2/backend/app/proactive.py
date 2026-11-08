@@ -23,7 +23,7 @@ class CompanionSettings(BaseModel):
     timezone: str = "Asia/Shanghai"
 
 
-def install_proactive_schema(connection: sqlite3.Connection, now: Callable[[], str]) -> None:
+def install_proactive_schema(connection: sqlite3.Connection, now: Callable[[], str], seed: bool = True) -> None:
     connection.executescript(
         """CREATE TABLE IF NOT EXISTS companion_settings(
         id INTEGER PRIMARY KEY CHECK(id=1),enabled INTEGER NOT NULL,allow_calls INTEGER NOT NULL,
@@ -35,9 +35,10 @@ def install_proactive_schema(connection: sqlite3.Connection, now: Callable[[], s
         CREATE INDEX IF NOT EXISTS idx_proactive_pending ON proactive_events(status,created_at);
         """
     )
-    connection.execute(
-        "INSERT OR IGNORE INTO companion_settings VALUES(1,1,1,1,'00:30','08:30','Asia/Shanghai',?)", (now(),)
-    )
+    if seed:
+        connection.execute(
+            "INSERT OR IGNORE INTO companion_settings VALUES(1,1,1,1,'00:30','08:30','Asia/Shanghai',?)", (now(),)
+        )
 
 
 def _inside_dnd(current: str, start: str, end: str) -> bool:
