@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from .chat_import import build_router as build_chat_import_router
+from .backup import build_router as build_backup_router
 from .memory_extract import build_router as build_memory_extract_router
 from .persona import build_system_prompt, detect_scene
 
@@ -104,6 +105,7 @@ def db() -> sqlite3.Connection:
 
 app.include_router(build_chat_import_router(db, now, new_id))
 app.include_router(build_memory_extract_router(db, now, new_id))
+app.include_router(build_backup_router(db, now, new_id))
 
 
 class ChatRequest(BaseModel):

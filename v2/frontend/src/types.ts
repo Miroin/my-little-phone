@@ -72,3 +72,23 @@ export interface IntegrityReport {
   checks: Record<string,boolean>;
   safeToBackup: boolean;
 }
+
+export interface RestorePreview {
+  token: string;
+  checksum: string;
+  exportedAt?: string;
+  counts: Record<string,number>;
+  mode: 'merge-only';
+  warning: string;
+}
+
+export interface ExtractionJob {
+  id: string;
+  batch_id: string;
+  status: 'ready'|'running'|'paused'|'complete';
+  total: number;
+  processed: number;
+  failed: number;
+  created: number;
+  last_error?: string;
+}

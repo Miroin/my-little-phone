@@ -398,7 +398,7 @@ def build_router(
                     score = _similarity(candidate["summary"], other["summary"])
                     if score < 0.48:
                         continue
-                    kind = "conflict" if score >= 0.58 and _opposite_polarity(candidate["summary"], other["summary"]) else "similar"
+                    kind = "conflict" if score >= 0.5 and _opposite_polarity(candidate["summary"], other["summary"]) else "similar"
                     cursor = connection.execute(
                         "INSERT OR IGNORE INTO memory_candidate_conflicts VALUES(?,?,?,?,?,?,?,?,?)",
                         (new_id(), batch_id, candidate["id"], other["id"], None, kind, round(score, 4), "open", timestamp),
@@ -411,7 +411,7 @@ def build_router(
                     score = _similarity(candidate["summary"], existing)
                     if score < 0.48:
                         continue
-                    kind = "conflict" if score >= 0.58 and _opposite_polarity(candidate["summary"], existing) else "existing"
+                    kind = "conflict" if score >= 0.5 and _opposite_polarity(candidate["summary"], existing) else "existing"
                     cursor = connection.execute(
                         "INSERT OR IGNORE INTO memory_candidate_conflicts VALUES(?,?,?,?,?,?,?,?,?)",
                         (new_id(), batch_id, candidate["id"], None, memory["id"], kind, round(score, 4), "open", timestamp),

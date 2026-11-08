@@ -1,4 +1,4 @@
-import type { ImportBatch,IntegrityReport,Memory,MemoryCandidate,Message } from './types';
+import type { ExtractionJob,ImportBatch,IntegrityReport,Memory,MemoryCandidate,Message,RestorePreview } from './types';
 
 const API_BASE=(import.meta.env.VITE_API_BASE_URL||'http://127.0.0.1:8000').replace(/\/$/,'');
 
@@ -92,5 +92,45 @@ export async function rejectCandidates(batchId:string,ids:string[]):Promise<{rej
 export async function loadIntegrityReport(batchId:string):Promise<IntegrityReport>{
   const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/integrity-report`);
   if(!response.ok)throw new Error('生成迁移报告失败');
+  return response.json();
+}
+
+export async function downloadBackup():Promise<void>{
+  const response=await fetch(`${API_BASE}/api/backups/export`);
+  if(!response.ok)throw new Error('备份生成失败');
+  const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement('a');
+  const disposition=response.headers.get('Content-Disposition')||'';
+  link.href=url;link.download=disposition.match(/filename="([^"]+)"/)?.[1]||'my-little-phone-v2-backup.json';
+  document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+}
+
+export async function previewRestore(file:File):Promise<RestorePreview>{
+  const body=new FormData();body.append('file',file);
+  const response=await fetch(`${API_BASE}/api/backups/restore-preview`,{method:'POST',body});
+  if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'备份检查失败');
+  return response.json();
+}
+
+export async function confirmRestore(token:string):Promise<{restored:boolean;inserted:Record<string,number>}>{
+  const response=await fetch(`${API_BASE}/api/backups/restore-confirm`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,mode:'merge'})});
+  if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'恢复失败');
+  return response.json();
+}
+
+export async function createExtractionJob(batchId:string):Promise<ExtractionJob>{
+  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/extraction-jobs`,{method:'POST'});
+  if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'创建精提取任务失败');
+  return response.json();
+}
+
+export async function controlExtractionJob(batchId:string,jobId:string,action:'pause'|'resume'|'retry'):Promise<ExtractionJob>{
+  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/extraction-jobs/${jobId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+  if(!response.ok)throw new Error('任务操作失败');
+  return response.json();
+}
+
+export async function runExtractionStep(batchId:string,jobId:string):Promise<{job:ExtractionJob;created:number;failed:number;complete:boolean}>{
+  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/deepseek-candidates?max_conversations=3&job_id=${jobId}`,{method:'POST'});
+  if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'精提取暂停');
   return response.json();
 }

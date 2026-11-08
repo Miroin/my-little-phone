@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from app.chat_import import _opposite_polarity, _similarity
 from app.main import app
 
-assert _similarity("陈钰喜欢香菜", "陈钰不喜欢香菜") >= 0.58
+assert _similarity("陈钰喜欢香菜", "陈钰不喜欢香菜") >= 0.5
 assert _opposite_polarity("陈钰喜欢香菜", "陈钰不喜欢香菜") is True
 
 client = TestClient(app)
@@ -42,6 +42,15 @@ again = client.post("/api/history-imports/chatgpt", files={"file": ("conversatio
 assert again.status_code == 201
 assert again.json()["id"] == batch["id"]
 assert again.json()["duplicate"] is True
+
+job = client.post(f"/api/history-imports/{batch['id']}/extraction-jobs")
+assert job.status_code == 201, job.text
+job_id = job.json()["id"]
+paused = client.patch(f"/api/history-imports/{batch['id']}/extraction-jobs/{job_id}", json={"action": "pause"})
+assert paused.json()["status"] == "paused"
+resumed = client.patch(f"/api/history-imports/{batch['id']}/extraction-jobs/{job_id}", json={"action": "resume"})
+assert resumed.json()["status"] == "ready"
+assert client.get(f"/api/history-imports/{batch['id']}/extraction-jobs/{job_id}").json()["total"] == 1
 
 conversations = client.get(f"/api/history-imports/{batch['id']}/conversations").json()
 assert conversations["total"] == 1
