@@ -8,6 +8,12 @@ export interface CharacterProfile{subject:'shenyan'|'user';displayName:string;ca
 export async function loadProfiles():Promise<CharacterProfile[]>{const response=await fetch(`${API_BASE}/api/profiles`);if(!response.ok)throw new Error('读取人物档案失败');return response.json();}
 export async function saveProfile(profile:CharacterProfile):Promise<CharacterProfile>{const response=await fetch(`${API_BASE}/api/profiles/${profile.subject}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:profile.displayName,categories:profile.categories})});if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'保存档案失败');return response.json();}
 export async function sendMessageFeedback(messageId:string,verdict:'like'|'dislike',reason=''):Promise<void>{const response=await fetch(`${API_BASE}/api/memory-feedback`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message_id:messageId,scene:'chat',verdict,reason})});if(!response.ok)throw new Error('反馈保存失败');}
+export interface LifeNote{id:string;kind:'home'|'music'|'schedule';title:string;content:string;created_at:string;updated_at:string}
+export interface MediaAsset{id:string;title:string;url:string;mime_type:string;created_at:string}
+export async function loadLifeNotes(kind?:LifeNote['kind']):Promise<LifeNote[]>{const response=await fetch(`${API_BASE}/api/life/notes${kind?`?kind=${kind}`:''}`);if(!response.ok)throw new Error('读取共同生活记录失败');return response.json();}
+export async function addLifeNote(kind:LifeNote['kind'],title:string,content:string):Promise<LifeNote>{const response=await fetch(`${API_BASE}/api/life/notes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,title,content})});if(!response.ok)throw new Error('保存失败');return response.json();}
+export async function loadMedia():Promise<MediaAsset[]>{const response=await fetch(`${API_BASE}/api/life/media`);if(!response.ok)throw new Error('读取相册失败');const items:MediaAsset[]=await response.json();return items.map(item=>({...item,url:`${API_BASE}${item.url}`}));}
+export async function uploadMedia(file:File,title=''):Promise<MediaAsset>{const body=new FormData();body.append('file',file);body.append('title',title);const response=await fetch(`${API_BASE}/api/life/media`,{method:'POST',body});if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'上传图片失败');const item=await response.json();return {...item,url:`${API_BASE}${item.url}`};}
 
 export async function loadMessages():Promise<Message[]> {
   const response=await fetch(`${API_BASE}/api/messages`);
@@ -204,6 +210,8 @@ export async function loadCompanionSettings():Promise<CompanionSettings>{
 export async function saveCompanionSettings(settings:CompanionSettings):Promise<CompanionSettings>{
   const response=await fetch(`${API_BASE}/api/companion/settings`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(settings)});if(!response.ok)throw new Error('保存主动陪伴设置失败');return response.json();
 }
+export interface ProactiveEvent{id:string;event_type:'message'|'call';status:string;reason:string;text:string;created_at:string;answered_at?:string}
+export async function loadProactiveEvents():Promise<ProactiveEvent[]>{const response=await fetch(`${API_BASE}/api/companion/events`);if(!response.ok)throw new Error('读取主动陪伴动态失败');return response.json();}
 
 function decodeApplicationKey(value:string):ArrayBuffer{
   const padded=(value+'='.repeat((4-value.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/');

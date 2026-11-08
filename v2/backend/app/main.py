@@ -25,6 +25,7 @@ from .voice import build_router as build_voice_router
 from .proactive import build_router as build_proactive_router, install_proactive_schema
 from .notifications import build_router as build_notification_router
 from .profiles import build_router as build_profile_router, profile_prompt
+from .life import build_router as build_life_router
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("MLP_DATABASE_PATH", ROOT / "data" / "little-phone.db"))
@@ -115,6 +116,7 @@ app.include_router(build_voice_router(db, now, new_id, ROOT))
 app.include_router(build_proactive_router(db, now, new_id))
 app.include_router(build_notification_router(db, now, new_id))
 app.include_router(build_profile_router(db, now))
+app.include_router(build_life_router(db, now, new_id))
 
 
 class ChatRequest(BaseModel):

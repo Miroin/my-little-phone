@@ -18,6 +18,7 @@ BACKUP_TABLES = (
     "imported_messages", "memory_candidates", "memory_candidate_conflicts",
     "extraction_runs", "extraction_jobs", "chat_runs", "audio_assets", "character_profiles",
     "companion_settings", "proactive_events",
+    "life_notes", "media_assets",
 )
 
 
@@ -60,6 +61,13 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
                     if path.is_file():
                         audio_files[row["id"]] = base64.b64encode(path.read_bytes()).decode("ascii")
             payload["audioFiles"] = audio_files
+            media_files: dict[str, str] = {}
+            if "media_assets" in existing:
+                for row in connection.execute("SELECT id,path FROM media_assets"):
+                    path = Path(row["path"])
+                    if path.is_file():
+                        media_files[row["id"]] = base64.b64encode(path.read_bytes()).decode("ascii")
+            payload["mediaFiles"] = media_files
         checksum = hashlib.sha256(_canonical(payload)).hexdigest()
         envelope = {"format": "my-little-phone-v2-backup", "checksum": checksum, "payload": payload}
         filename = f"my-little-phone-v2-{now()[:10]}.json"
@@ -110,7 +118,9 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
                 raise HTTPException(status_code=404, detail="恢复预览不存在或已经使用")
             payload = json.loads(session["payload_json"])
             audio_dir = Path(os.getenv("MLP_AUDIO_PATH", Path(__file__).resolve().parents[1] / "data" / "audio"))
+            media_dir = Path(os.getenv("MLP_MEDIA_PATH", Path(__file__).resolve().parents[1] / "data" / "media"))
             audio_dir.mkdir(parents=True, exist_ok=True)
+            media_dir.mkdir(parents=True, exist_ok=True)
             existing = _tables(connection)
             for table in BACKUP_TABLES:
                 rows = payload.get("tables", {}).get(table, [])
@@ -124,6 +134,9 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
                         continue
                     if table == "audio_assets":
                         row = {**row, "path": str(audio_dir / f"{row['id']}.mp3")}
+                    elif table == "media_assets":
+                        extension = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}.get(row.get("mime_type"), ".img")
+                        row = {**row, "path": str(media_dir / f"{row['id']}{extension}")}
                     columns = [name for name in allowed if name in row]
                     if not columns:
                         continue
@@ -140,6 +153,16 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
                         target.write_bytes(base64.b64decode(encoded, validate=True))
                     except (ValueError, TypeError) as exc:
                         raise HTTPException(status_code=400, detail="备份中的语音文件损坏") from exc
+            media_rows = {row.get("id"): row for row in payload.get("tables", {}).get("media_assets", []) if isinstance(row, dict)}
+            for asset_id, encoded in payload.get("mediaFiles", {}).items():
+                row = media_rows.get(asset_id, {})
+                extension = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}.get(row.get("mime_type"), ".img")
+                target = media_dir / f"{asset_id}{extension}"
+                if not target.exists():
+                    try:
+                        target.write_bytes(base64.b64decode(encoded, validate=True))
+                    except (ValueError, TypeError) as exc:
+                        raise HTTPException(status_code=400, detail="备份中的相册文件损坏") from exc
             connection.execute("UPDATE restore_sessions SET status='merged',updated_at=? WHERE id=?", (now(), body.token))
         return {"restored": True, "mode": "merge", "inserted": inserted, "checksum": session["checksum"]}
 
