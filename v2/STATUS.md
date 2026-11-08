@@ -19,11 +19,12 @@
 - 固定 A-J 互动回归集和可选真实模型评分脚本。
 - PWA manifest、Service Worker、离线外壳；Capacitor Android/iOS 原生工程、麦克风与语音权限基础。
 - Docker 后端、Render 持久磁盘蓝图、环境变量模板和部署说明。
+- GitHub Actions 主动陪伴调度，每五分钟触发决策与推送派发，不需要额外定时任务服务。
 
 ## 需要外部账号或真机才能完成的发布步骤
 
 - 部署持续运行的后端并填入 DeepSeek、MiniMax、VAPID 密钥。
-- 在云平台创建定时任务，触发主动陪伴与通知派发。
+- 在 GitHub Actions 中填写后端地址和调度令牌，让仓库自带的定时工作流开始运行。
 - iOS 原生包签名、APNs、CallKit 和真机审核需要 Apple Developer Team、证书与 Mac/Xcode。
 - Android 系统级来电界面和商店签名需要 Android 构建/签名环境。
 - iPhone Safari 后台限制仍然存在：关闭网页后的主动联系依赖已安装 PWA、用户通知授权和持续运行的后端。

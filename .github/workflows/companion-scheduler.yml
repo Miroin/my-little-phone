@@ -1,0 +1,30 @@
+name: 小手叽主动陪伴调度
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: little-phone-companion-scheduler
+  cancel-in-progress: false
+
+jobs:
+  companion:
+    if: ${{ vars.MLP_BACKEND_URL != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: 让沈砚判断是否主动联系
+        env:
+          BACKEND_URL: ${{ vars.MLP_BACKEND_URL }}
+          SCHEDULER_TOKEN: ${{ secrets.MLP_SCHEDULER_TOKEN }}
+        run: |
+          set -euo pipefail
+          base="${BACKEND_URL%/}"
+          curl --fail-with-body --silent --show-error --retry 2 --max-time 90 \
+            -X POST -H "X-Scheduler-Token: ${SCHEDULER_TOKEN}" \
+            "${base}/api/companion/tick"
+          curl --fail-with-body --silent --show-error --retry 2 --max-time 90 \
+            -X POST -H "X-Scheduler-Token: ${SCHEDULER_TOKEN}" \
+            "${base}/api/notifications/dispatch"

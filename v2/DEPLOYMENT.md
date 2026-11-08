@@ -19,12 +19,17 @@ Web Push 的 VAPID 密钥会在首次启动时自动生成到 `/data/vapid.json`
 
 ## 2. 主动陪伴调度
 
-使用云平台的定时任务，每隔数分钟顺序调用：
+仓库已包含 `.github/workflows/companion-scheduler.yml`，无需再找额外定时任务服务。在 GitHub 仓库设置中添加：
+
+- Actions variable：`MLP_BACKEND_URL`，值为部署后的后端 HTTPS 地址。
+- Actions secret：`MLP_SCHEDULER_TOKEN`，值与后端的 `SCHEDULER_TOKEN` 相同。
+
+工作流每五分钟顺序调用：
 
 1. `POST https://你的后端/api/companion/tick`
 2. `POST https://你的后端/api/notifications/dispatch`
 
-两个请求都带请求头 `X-Scheduler-Token: 你的 SCHEDULER_TOKEN`。决策层没有固定每日次数，但若上一条主动消息或来电尚未得到回应，会自动等待；勿扰时段也不会触发。
+两个请求都带受保护的调度令牌。决策层没有固定每日次数，但若上一条主动消息或来电尚未得到回应，会自动等待；勿扰时段也不会触发。GitHub 定时任务可能有数分钟延迟，因此不是精确闹钟。
 
 ## 3. 前端
 
