@@ -1,4 +1,4 @@
-import type { Memory,Message } from './types';
+import type { ImportBatch,Memory,Message } from './types';
 
 const API_BASE=(import.meta.env.VITE_API_BASE_URL||'http://127.0.0.1:8000').replace(/\/$/,'');
 
@@ -17,5 +17,12 @@ export async function sendMessage(text:string):Promise<{user:Message;assistant:M
 export async function loadMemories():Promise<Memory[]> {
   const response=await fetch(`${API_BASE}/api/memories?limit=100`);
   if(!response.ok) throw new Error('读取记忆失败');
+  return response.json();
+}
+
+export async function uploadChatHistory(file:File):Promise<ImportBatch> {
+  const body=new FormData();body.append('file',file);
+  const response=await fetch(`${API_BASE}/api/history-imports/chatgpt`,{method:'POST',body});
+  if(!response.ok) throw new Error((await response.json().catch(()=>null))?.detail||'读取聊天文件失败');
   return response.json();
 }

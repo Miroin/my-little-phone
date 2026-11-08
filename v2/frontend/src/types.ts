@@ -37,3 +37,14 @@ export interface Memory {
   tags: string[];
   createdAt: string;
 }
+
+export interface ImportBatch {
+  id: string;
+  filename: string;
+  status: 'reading' | 'previewed' | 'failed';
+  conversation_count: number;
+  message_count: number;
+  cursor: number;
+  duplicate?: boolean;
+  resumed?: boolean;
+}
