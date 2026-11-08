@@ -56,4 +56,19 @@ export interface MemoryCandidate {
   evidence_text: string;
   confidence: number;
   status: 'pending' | 'accepted' | 'rejected';
+  conflict_count?: number;
+  has_conflict?: number;
+}
+
+export interface IntegrityReport {
+  batchId: string;
+  sourceStatus: string;
+  sourceSha256: string;
+  conversations: number;
+  messages: number;
+  candidates: Record<string,number>;
+  acceptedMemories: number;
+  openIssues: Record<string,number>;
+  checks: Record<string,boolean>;
+  safeToBackup: boolean;
 }

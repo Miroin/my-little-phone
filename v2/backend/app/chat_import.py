@@ -16,6 +16,11 @@ class CandidateSelection(BaseModel):
     ids: list[str] = Field(min_length=1, max_length=200)
 
 
+class CandidateUpdate(BaseModel):
+    layer: str = Field(pattern="^(personality|relationship|user|event|feeling|plan|sample)$")
+    summary: str = Field(min_length=2, max_length=1200)
+
+
 def _timestamp(value: object) -> str | None:
     if value is None:
         return None
@@ -127,8 +132,39 @@ def install_schema(connection: sqlite3.Connection) -> None:
             UNIQUE(batch_id,source_hash)
         );
         CREATE INDEX IF NOT EXISTS idx_candidates_batch ON memory_candidates(batch_id,status,layer,created_at);
+        CREATE TABLE IF NOT EXISTS memory_candidate_conflicts(
+            id TEXT PRIMARY KEY,
+            batch_id TEXT NOT NULL REFERENCES import_batches(id) ON DELETE CASCADE,
+            candidate_id TEXT NOT NULL REFERENCES memory_candidates(id) ON DELETE CASCADE,
+            other_candidate_id TEXT REFERENCES memory_candidates(id) ON DELETE CASCADE,
+            memory_id TEXT,
+            kind TEXT NOT NULL,
+            score REAL NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open',
+            created_at TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_candidate_conflict_pair
+        ON memory_candidate_conflicts(candidate_id,COALESCE(other_candidate_id,''),COALESCE(memory_id,''),kind);
+        CREATE INDEX IF NOT EXISTS idx_candidate_conflicts_batch ON memory_candidate_conflicts(batch_id,status,kind);
         """
     )
+
+
+def _terms(value: str) -> set[str]:
+    compact = "".join(value.lower().split())
+    return {compact[index:index + 2] for index in range(max(1, len(compact) - 1)) if compact[index:index + 2]}
+
+
+def _similarity(left: str, right: str) -> float:
+    a, b = _terms(left), _terms(right)
+    if not a or not b:
+        return 0
+    return len(a & b) / len(a | b)
+
+
+def _opposite_polarity(left: str, right: str) -> bool:
+    negatives = ("不喜欢", "讨厌", "不要", "不能", "不吃", "不想", "不愿意")
+    return any(marker in left for marker in negatives) != any(marker in right for marker in negatives)
 
 
 def build_router(
@@ -307,7 +343,7 @@ def build_router(
     def list_candidates(
         batch_id: str,
         status: str = Query(default="pending", pattern="^(pending|accepted|rejected)$"),
-        layer: str | None = Query(default=None, pattern="^(user|event|plan|sample)$"),
+        layer: str | None = Query(default=None, pattern="^(personality|relationship|user|event|feeling|plan|sample)$"),
         offset: int = Query(default=0, ge=0),
         limit: int = Query(default=20, ge=1, le=50),
     ) -> dict:
@@ -320,15 +356,125 @@ def build_router(
             install_schema(connection)
             total = connection.execute(f"SELECT COUNT(*) FROM memory_candidates WHERE {where}", values).fetchone()[0]
             rows = connection.execute(
-                f"SELECT * FROM memory_candidates WHERE {where} ORDER BY created_at,id LIMIT ? OFFSET ?",
+                f"""SELECT mc.*,
+                (SELECT COUNT(*) FROM memory_candidate_conflicts cc WHERE cc.status='open' AND (cc.candidate_id=mc.id OR cc.other_candidate_id=mc.id)) conflict_count,
+                EXISTS(SELECT 1 FROM memory_candidate_conflicts cc WHERE cc.status='open' AND cc.kind='conflict' AND (cc.candidate_id=mc.id OR cc.other_candidate_id=mc.id)) has_conflict
+                FROM memory_candidates mc WHERE {where.replace('batch_id', 'mc.batch_id').replace('status', 'mc.status').replace('layer', 'mc.layer')}
+                ORDER BY mc.created_at,mc.id LIMIT ? OFFSET ?""",
                 [*values, limit, offset],
             ).fetchall()
         return {"total": total, "offset": offset, "limit": limit, "items": [dict(row) for row in rows]}
+
+    @router.patch("/{batch_id}/candidates/{candidate_id}")
+    def update_candidate(batch_id: str, candidate_id: str, body: CandidateUpdate) -> dict:
+        summary = " ".join(body.summary.split()).strip()
+        with db_factory() as connection:
+            install_schema(connection)
+            cursor = connection.execute(
+                "UPDATE memory_candidates SET layer=?,summary=?,source_hash=? WHERE id=? AND batch_id=? AND status='pending'",
+                (body.layer, summary, hashlib.sha256(f"{body.layer}\n{summary}".encode("utf-8")).hexdigest(), candidate_id, batch_id),
+            )
+            if not cursor.rowcount:
+                raise HTTPException(status_code=404, detail="候选不存在或已经处理，不能再编辑")
+            connection.execute("DELETE FROM memory_candidate_conflicts WHERE candidate_id=? OR other_candidate_id=?", (candidate_id, candidate_id))
+            row = connection.execute("SELECT * FROM memory_candidates WHERE id=?", (candidate_id,)).fetchone()
+        return dict(row)
+
+    @router.post("/{batch_id}/candidates/analyze")
+    def analyze_candidates(batch_id: str) -> dict:
+        timestamp = now()
+        created = 0
+        with db_factory() as connection:
+            install_schema(connection)
+            connection.execute("DELETE FROM memory_candidate_conflicts WHERE batch_id=? AND status='open'", (batch_id,))
+            candidates = connection.execute(
+                "SELECT * FROM memory_candidates WHERE batch_id=? AND status='pending' ORDER BY created_at,id", (batch_id,)
+            ).fetchall()
+            memories = connection.execute("SELECT id,layer,content,summary FROM memory_items WHERE status='active'").fetchall()
+            for index, candidate in enumerate(candidates):
+                for other in candidates[index + 1:]:
+                    if candidate["layer"] != other["layer"]:
+                        continue
+                    score = _similarity(candidate["summary"], other["summary"])
+                    if score < 0.48:
+                        continue
+                    kind = "conflict" if score >= 0.58 and _opposite_polarity(candidate["summary"], other["summary"]) else "similar"
+                    cursor = connection.execute(
+                        "INSERT OR IGNORE INTO memory_candidate_conflicts VALUES(?,?,?,?,?,?,?,?,?)",
+                        (new_id(), batch_id, candidate["id"], other["id"], None, kind, round(score, 4), "open", timestamp),
+                    )
+                    created += cursor.rowcount
+                for memory in memories:
+                    if candidate["layer"] != memory["layer"]:
+                        continue
+                    existing = memory["summary"] or memory["content"]
+                    score = _similarity(candidate["summary"], existing)
+                    if score < 0.48:
+                        continue
+                    kind = "conflict" if score >= 0.58 and _opposite_polarity(candidate["summary"], existing) else "existing"
+                    cursor = connection.execute(
+                        "INSERT OR IGNORE INTO memory_candidate_conflicts VALUES(?,?,?,?,?,?,?,?,?)",
+                        (new_id(), batch_id, candidate["id"], None, memory["id"], kind, round(score, 4), "open", timestamp),
+                    )
+                    created += cursor.rowcount
+            counts = connection.execute(
+                "SELECT kind,COUNT(*) count FROM memory_candidate_conflicts WHERE batch_id=? AND status='open' GROUP BY kind", (batch_id,)
+            ).fetchall()
+        return {"analyzed": len(candidates), "created": created, "counts": {row["kind"]: row["count"] for row in counts}}
+
+    @router.get("/{batch_id}/candidates/{candidate_id}/conflicts")
+    def candidate_conflicts(batch_id: str, candidate_id: str) -> list[dict]:
+        with db_factory() as connection:
+            install_schema(connection)
+            rows = connection.execute(
+                """SELECT c.*,o.summary other_summary,m.summary memory_summary,m.content memory_content
+                FROM memory_candidate_conflicts c
+                LEFT JOIN memory_candidates o ON o.id=c.other_candidate_id
+                LEFT JOIN memory_items m ON m.id=c.memory_id
+                WHERE c.batch_id=? AND (c.candidate_id=? OR c.other_candidate_id=?) AND c.status='open'
+                ORDER BY c.kind DESC,c.score DESC""",
+                (batch_id, candidate_id, candidate_id),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    @router.get("/{batch_id}/integrity-report")
+    def integrity_report(batch_id: str) -> dict:
+        with db_factory() as connection:
+            install_schema(connection)
+            batch = connection.execute("SELECT * FROM import_batches WHERE id=?", (batch_id,)).fetchone()
+            if not batch:
+                raise HTTPException(status_code=404, detail="没有找到这个导入批次")
+            stored_conversations = connection.execute("SELECT COUNT(*) FROM imported_conversations WHERE batch_id=?", (batch_id,)).fetchone()[0]
+            stored_messages = connection.execute(
+                "SELECT COUNT(*) FROM imported_messages WHERE conversation_id IN (SELECT id FROM imported_conversations WHERE batch_id=?)", (batch_id,)
+            ).fetchone()[0]
+            candidate_rows = connection.execute(
+                "SELECT status,COUNT(*) count FROM memory_candidates WHERE batch_id=? GROUP BY status", (batch_id,)
+            ).fetchall()
+            conflict_rows = connection.execute(
+                "SELECT kind,COUNT(*) count FROM memory_candidate_conflicts WHERE batch_id=? AND status='open' GROUP BY kind", (batch_id,)
+            ).fetchall()
+            accepted_memories = connection.execute(
+                "SELECT COUNT(*) FROM memory_items WHERE source_id IN (SELECT id FROM memory_candidates WHERE batch_id=? AND status='accepted') AND status!='deleted'", (batch_id,)
+            ).fetchone()[0]
+        candidates = {row["status"]: row["count"] for row in candidate_rows}
+        checks = {
+            "conversationCountMatches": stored_conversations == batch["conversation_count"],
+            "messageCountMatches": stored_messages == batch["message_count"],
+            "acceptedMemoriesTraceable": accepted_memories == candidates.get("accepted", 0),
+        }
+        return {
+            "batchId": batch_id, "sourceStatus": batch["status"], "sourceSha256": batch["file_sha256"],
+            "conversations": stored_conversations, "messages": stored_messages, "candidates": candidates,
+            "acceptedMemories": accepted_memories, "openIssues": {row["kind"]: row["count"] for row in conflict_rows},
+            "checks": checks, "safeToBackup": all(checks.values()) and candidates.get("pending", 0) == 0 and not any(row["kind"] == "conflict" for row in conflict_rows),
+        }
 
     @router.post("/{batch_id}/candidates/accept")
     def accept_candidates(batch_id: str, body: CandidateSelection) -> dict:
         accepted = 0
         skipped = 0
+        blocked: list[str] = []
         timestamp = now()
         placeholders = ",".join("?" for _ in body.ids)
         with db_factory() as connection:
@@ -338,6 +484,13 @@ def build_router(
                 [batch_id, *body.ids],
             ).fetchall()
             for row in rows:
+                has_conflict = connection.execute(
+                    "SELECT 1 FROM memory_candidate_conflicts WHERE batch_id=? AND status='open' AND kind='conflict' AND (candidate_id=? OR other_candidate_id=?)",
+                    (batch_id, row["id"], row["id"]),
+                ).fetchone()
+                if has_conflict:
+                    blocked.append(row["id"])
+                    continue
                 memory_id = new_id()
                 try:
                     connection.execute(
@@ -349,11 +502,13 @@ def build_router(
                         (new_id(), memory_id, row["conversation_id"], row["message_id"], row["message_id"], row["evidence_text"], hashlib.sha256(row["evidence_text"].encode("utf-8")).hexdigest(), timestamp),
                     )
                     connection.execute("UPDATE memory_candidates SET status='accepted' WHERE id=?", (row["id"],))
+                    connection.execute("UPDATE memory_candidate_conflicts SET status='resolved' WHERE candidate_id=? OR other_candidate_id=?", (row["id"], row["id"]))
                     accepted += 1
                 except sqlite3.IntegrityError:
                     connection.execute("UPDATE memory_candidates SET status='accepted' WHERE id=?", (row["id"],))
+                    connection.execute("UPDATE memory_candidate_conflicts SET status='resolved' WHERE candidate_id=? OR other_candidate_id=?", (row["id"], row["id"]))
                     skipped += 1
-        return {"accepted": accepted, "skippedDuplicates": skipped}
+        return {"accepted": accepted, "skippedDuplicates": skipped, "blockedConflicts": blocked}
 
     @router.post("/{batch_id}/candidates/reject")
     def reject_candidates(batch_id: str, body: CandidateSelection) -> dict:

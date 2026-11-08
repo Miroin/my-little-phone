@@ -8,7 +8,11 @@ if db_path.exists():
 os.environ["MLP_DATABASE_PATH"] = str(db_path)
 
 from fastapi.testclient import TestClient
+from app.chat_import import _opposite_polarity, _similarity
 from app.main import app
+
+assert _similarity("陈钰喜欢香菜", "陈钰不喜欢香菜") >= 0.58
+assert _opposite_polarity("陈钰喜欢香菜", "陈钰不喜欢香菜") is True
 
 client = TestClient(app)
 sample = [{
@@ -52,7 +56,17 @@ assert local.json()["counts"]["user"] == 1
 candidates = client.get(f"/api/history-imports/{batch['id']}/candidates?limit=20").json()
 assert candidates["total"] == 1
 candidate_id = candidates["items"][0]["id"]
+updated = client.patch(f"/api/history-imports/{batch['id']}/candidates/{candidate_id}", json={"layer": "user", "summary": "陈钰喜欢下雨天，也喜欢沈砚陪她坐地铁"})
+assert updated.status_code == 200, updated.text
+assert updated.json()["summary"].startswith("陈钰喜欢")
+analyzed = client.post(f"/api/history-imports/{batch['id']}/candidates/analyze")
+assert analyzed.status_code == 200, analyzed.text
+before_report = client.get(f"/api/history-imports/{batch['id']}/integrity-report").json()
+assert before_report["safeToBackup"] is False
 accepted = client.post(f"/api/history-imports/{batch['id']}/candidates/accept", json={"ids": [candidate_id]})
 assert accepted.json()["accepted"] == 1
 assert client.get("/api/memories?status=active").json()[0]["sourceType"] == "history-local"
+report = client.get(f"/api/history-imports/{batch['id']}/integrity-report").json()
+assert report["safeToBackup"] is True
+assert report["checks"]["acceptedMemoriesTraceable"] is True
 print("history import smoke test passed")

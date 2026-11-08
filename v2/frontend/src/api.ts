@@ -1,4 +1,4 @@
-import type { ImportBatch,Memory,MemoryCandidate,Message } from './types';
+import type { ImportBatch,IntegrityReport,Memory,MemoryCandidate,Message } from './types';
 
 const API_BASE=(import.meta.env.VITE_API_BASE_URL||'http://127.0.0.1:8000').replace(/\/$/,'');
 
@@ -65,8 +65,32 @@ export async function loadCandidates(batchId:string,offset=0):Promise<{total:num
   return response.json();
 }
 
-export async function acceptCandidates(batchId:string,ids:string[]):Promise<{accepted:number;skippedDuplicates:number}> {
+export async function acceptCandidates(batchId:string,ids:string[]):Promise<{accepted:number;skippedDuplicates:number;blockedConflicts:string[]}> {
   const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/candidates/accept`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});
   if(!response.ok) throw new Error('写入长期记忆失败');
+  return response.json();
+}
+
+export async function analyzeCandidates(batchId:string):Promise<{analyzed:number;created:number;counts:Record<string,number>}>{
+  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/candidates/analyze`,{method:'POST'});
+  if(!response.ok)throw new Error('相似与冲突检查失败');
+  return response.json();
+}
+
+export async function updateCandidate(batchId:string,id:string,layer:MemoryCandidate['layer'],summary:string):Promise<MemoryCandidate>{
+  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/candidates/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({layer,summary})});
+  if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'候选修改失败');
+  return response.json();
+}
+
+export async function rejectCandidates(batchId:string,ids:string[]):Promise<{rejected:number}>{
+  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/candidates/reject`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});
+  if(!response.ok)throw new Error('忽略候选失败');
+  return response.json();
+}
+
+export async function loadIntegrityReport(batchId:string):Promise<IntegrityReport>{
+  const response=await fetch(`${API_BASE}/api/history-imports/${batchId}/integrity-report`);
+  if(!response.ok)throw new Error('生成迁移报告失败');
   return response.json();
 }
