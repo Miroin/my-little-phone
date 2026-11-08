@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import base64
+from functools import lru_cache
+from pathlib import Path
 from typing import Callable
 
 from fastapi import APIRouter, Header, HTTPException
@@ -17,6 +20,32 @@ class PushKeys(BaseModel):
 class PushSubscription(BaseModel):
     endpoint: str = Field(min_length=20, max_length=3000)
     keys: PushKeys
+
+
+@lru_cache(maxsize=1)
+def vapid_config() -> tuple[str, str]:
+    """Use configured VAPID keys or create one persistent pair on first start."""
+    configured_public = os.getenv("VAPID_PUBLIC_KEY", "").strip()
+    configured_private = os.getenv("VAPID_PRIVATE_KEY", "").replace("\\n", "\n").strip()
+    if configured_public and configured_private:
+        return configured_public, configured_private
+    if configured_public or configured_private:
+        raise RuntimeError("VAPID_PUBLIC_KEY 和 VAPID_PRIVATE_KEY 必须同时配置")
+    path = Path(os.getenv("MLP_VAPID_PATH", Path(__file__).resolve().parents[1] / "data" / "vapid.json"))
+    if path.is_file():
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data["publicKey"], data["privateKey"]
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    private = ec.generate_private_key(ec.SECP256R1())
+    public_bytes = private.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+    public_key = base64.urlsafe_b64encode(public_bytes).decode("ascii").rstrip("=")
+    private_key = private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode("ascii")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps({"publicKey": public_key, "privateKey": private_key}), encoding="utf-8")
+    temporary.replace(path)
+    return public_key, private_key
 
 
 def install_notification_schema(connection: sqlite3.Connection) -> None:
@@ -55,9 +84,10 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
 
     @router.get("/vapid-public-key")
     def public_key() -> dict:
-        value = os.getenv("VAPID_PUBLIC_KEY", "").strip()
-        if not value:
-            raise HTTPException(status_code=503, detail="推送服务尚未配置 VAPID 公钥")
+        try:
+            value, _ = vapid_config()
+        except (OSError, ValueError, KeyError, RuntimeError) as exc:
+            raise HTTPException(status_code=503, detail="推送密钥初始化失败") from exc
         return {"publicKey": value}
 
     @router.post("/subscribe", status_code=201)
@@ -84,9 +114,11 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
         expected = os.getenv("SCHEDULER_TOKEN", "").strip()
         if not expected or x_scheduler_token != expected:
             raise HTTPException(status_code=401, detail="调度凭证无效")
-        private_key, subject = os.getenv("VAPID_PRIVATE_KEY", "").strip(), os.getenv("VAPID_SUBJECT", "mailto:owner@example.com").strip()
-        if not private_key:
-            raise HTTPException(status_code=503, detail="推送服务尚未配置 VAPID 私钥")
+        try:
+            _, private_key = vapid_config()
+        except (OSError, ValueError, KeyError, RuntimeError) as exc:
+            raise HTTPException(status_code=503, detail="推送密钥初始化失败") from exc
+        subject = os.getenv("VAPID_SUBJECT", "").strip() or "mailto:owner@example.com"
         try:
             from pywebpush import WebPushException, webpush
         except ImportError as exc:

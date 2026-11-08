@@ -9,11 +9,13 @@
 - `MINIMAX_VOICE_ID`
 - `SCHEDULER_TOKEN`
 - `MLP_ACCESS_TOKEN`（保护聊天、记忆、相册和付费模型接口的个人访问口令）
-- `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`
+- `VAPID_SUBJECT`（通知发送者邮箱）
 
 SQLite 与音频都写入 `/data`，重新部署不会丢失。正式迁移前仍应下载一份 v2 完整备份。
 
 Render 蓝图会自动生成 `MLP_ACCESS_TOKEN`。部署完成后在 Render 环境变量中复制它，再填入小手叽“设置 → 模型与接口 → 个人访问口令”。不要把它写进仓库、截图或分享给其他人。
+
+Web Push 的 VAPID 密钥会在首次启动时自动生成到 `/data/vapid.json`，无需手工粘贴，并会随持久磁盘保留。已有自备密钥时仍可同时设置 `VAPID_PUBLIC_KEY` 和 `VAPID_PRIVATE_KEY` 覆盖自动密钥。
 
 ## 2. 主动陪伴调度
 
