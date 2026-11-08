@@ -127,6 +127,10 @@ def db() -> sqlite3.Connection:
         );
         """
     )
+    call_columns = {row[1] for row in connection.execute("PRAGMA table_info(calls)")}
+    if "answered_at" not in call_columns:
+        connection.execute("ALTER TABLE calls ADD COLUMN answered_at TEXT")
+        connection.execute("UPDATE calls SET answered_at=started_at WHERE status IN ('active','answered')")
     install_import_schema(connection)
     install_extraction_schema(connection)
     install_voice_schema(connection)
@@ -233,7 +237,7 @@ def memory_dict(row: sqlite3.Row) -> dict:
 def call_dict(row: sqlite3.Row) -> dict:
     return {
         "id": row["id"], "direction": row["direction"], "status": row["status"],
-        "startedAt": row["started_at"], "endedAt": row["ended_at"],
+        "startedAt": row["started_at"], "answeredAt": row["answered_at"], "endedAt": row["ended_at"],
         "durationSeconds": row["duration_seconds"], "turns": json.loads(row["turns_json"] or "[]"),
     }
 
@@ -506,8 +510,8 @@ def list_calls(limit: int = Query(default=50, ge=1, le=200)) -> list[dict]:
 def start_call(body: CallStart) -> dict:
     call_id, timestamp = new_id(), now()
     with db() as connection:
-        connection.execute("INSERT INTO calls VALUES(?,?,?,?,?,?,?)", (call_id, body.direction, "active", timestamp, None, 0, "[]"))
-    return {"id": call_id, "direction": body.direction, "status": "active", "startedAt": timestamp, "durationSeconds": 0, "turns": []}
+        connection.execute("INSERT INTO calls(id,direction,status,started_at,ended_at,duration_seconds,turns_json,answered_at) VALUES(?,?,?,?,?,?,?,?)", (call_id, body.direction, "active", timestamp, None, 0, "[]", timestamp))
+    return {"id": call_id, "direction": body.direction, "status": "active", "startedAt": timestamp, "answeredAt": timestamp, "durationSeconds": 0, "turns": []}
 
 
 @app.post("/api/calls/{call_id}/turns", status_code=201)
@@ -527,8 +531,9 @@ def add_call_turn(call_id: str, body: CallTurnCreate) -> dict:
 
 @app.post("/api/calls/{call_id}/answer")
 def answer_call(call_id: str) -> dict:
+    answered = now()
     with db() as connection:
-        cursor = connection.execute("UPDATE calls SET status='active' WHERE id=? AND status='ringing'", (call_id,))
+        cursor = connection.execute("UPDATE calls SET status='active',answered_at=? WHERE id=? AND status='ringing'", (answered, call_id))
         if not cursor.rowcount:
             raise HTTPException(status_code=404, detail="来电不存在或已经处理")
         connection.execute("UPDATE proactive_events SET status='answered',answered_at=? WHERE call_id=?", (now(), call_id))
@@ -547,8 +552,8 @@ def end_call(call_id: str, body: CallEnd) -> dict:
             return call_dict(row)
         if row["status"] == "ringing" and body.status == "answered":
             raise HTTPException(status_code=409, detail="请先接听来电")
-        started = datetime.fromisoformat(row["started_at"])
-        duration = max(0, int((ended - started).total_seconds())) if body.status == "answered" else 0
+        connected_at = datetime.fromisoformat(row["answered_at"] or row["started_at"])
+        duration = max(0, int((ended - connected_at).total_seconds())) if body.status == "answered" else 0
         connection.execute("UPDATE calls SET status=?,ended_at=?,duration_seconds=? WHERE id=?", (body.status, ended.isoformat(), duration, call_id))
         label = "通话" if body.status == "answered" else ("未接来电" if body.status == "missed" else "已拒绝来电")
         event_text = f"{label} · {duration // 60:02d}:{duration % 60:02d}" if duration else label

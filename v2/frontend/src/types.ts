@@ -24,6 +24,7 @@ export interface CallRecord {
   direction: 'incoming' | 'outgoing';
   status: 'ringing' | 'active' | 'answered' | 'missed' | 'declined';
   startedAt: string;
+  answeredAt?: string;
   endedAt?: string;
   durationSeconds: number;
   turns: CallTurn[];

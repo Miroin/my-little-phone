@@ -143,7 +143,7 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
                 connection.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", (message_id, "assistant", "text", decision["text"], timestamp, None))
             else:
                 call_id = new_id()
-                connection.execute("INSERT INTO calls VALUES(?,?,?,?,?,?,?)", (call_id, "incoming", "ringing", timestamp, None, 0, "[]"))
+                connection.execute("INSERT INTO calls(id,direction,status,started_at,ended_at,duration_seconds,turns_json,answered_at) VALUES(?,?,?,?,?,?,?,?)", (call_id, "incoming", "ringing", timestamp, None, 0, "[]", None))
             connection.execute(
                 "INSERT INTO proactive_events VALUES(?,?,?,?,?,?,?,?,?)",
                 (event_id, decision["action"], "sent", decision["reason"], decision["text"], message_id, call_id, timestamp, None),
