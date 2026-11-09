@@ -194,7 +194,12 @@ voice 表示他此刻更想直接发一条语音；只在语气、亲近感或�
                 "INSERT INTO proactive_events VALUES(?,?,?,?,?,?,?,?,?)",
                 (event_id, decision["action"], "sent", decision["reason"], decision["text"], message_id, call_id, timestamp, None),
             )
-            enqueue_notification(connection, new_id, now, decision["action"], decision["text"] or ("沈砚想给你打电话" if call_id else "沈砚来找你了"))
+            notification_url = f"/v2-preview/?open=calls&call={call_id}" if call_id else "/v2-preview/?open=chat"
+            enqueue_notification(
+                connection, new_id, now, decision["action"],
+                decision["text"] or ("沈砚想给你打电话" if call_id else "沈砚来找你了"),
+                notification_url,
+            )
         return {**decision, "eventId": event_id, "messageId": message_id, "callId": call_id}
 
     return router

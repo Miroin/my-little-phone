@@ -12,7 +12,7 @@ db_path = Path(__file__).parent / "data" / "test-notifications.db"
 db_path.unlink(missing_ok=True)
 os.environ["MLP_DATABASE_PATH"] = str(db_path)
 
-from app.notifications import vapid_config
+from app.notifications import enqueue_notification, vapid_config
 
 vapid_config.cache_clear()
 public_key, private_key = vapid_config()
@@ -30,6 +30,13 @@ with main.db() as connection:
         "INSERT INTO push_subscriptions VALUES(?,?,?,?,?,?)",
         ("https://push.example/device", "p" * 40, "a" * 12, 1, main.now(), main.now()),
     )
+    call_notice = enqueue_notification(
+        connection, main.new_id, main.now, "call", "想听听你的声音。",
+        "/v2-preview/?open=calls&call=test-call",
+    )
+    notice = connection.execute("SELECT * FROM notification_outbox WHERE id=?", (call_notice,)).fetchone()
+    assert notice["title"] == "沈砚来电"
+    assert notice["url"].endswith("open=calls&call=test-call")
     connection.execute(
         "INSERT INTO notification_outbox VALUES(?,?,?,?,?,?,?,?,?,?)",
         ("failed-job", "message", "沈砚", "想你了", "/v2-preview/", "failed", 1, "temporary", main.now(), main.now()),
@@ -41,5 +48,5 @@ assert status.json()["counts"]["failed"] == 1
 retried = client.post("/api/notifications/retry-failed")
 assert retried.status_code == 200
 assert retried.json()["queued"] == 1
-assert client.get("/api/notifications/status").json()["counts"]["pending"] == 1
+assert client.get("/api/notifications/status").json()["counts"]["pending"] == 2
 print("persistent web push key test passed")

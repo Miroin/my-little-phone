@@ -69,12 +69,13 @@ def enqueue_notification(
     event_type: str,
     body: str,
     url: str = "/v2-preview/",
+    title: str | None = None,
 ) -> str:
     install_notification_schema(connection)
     notification_id, timestamp = new_id(), now()
     connection.execute(
         "INSERT INTO notification_outbox VALUES(?,?,?,?,?,'pending',0,NULL,?,?)",
-        (notification_id, event_type, "沈砚", body[:500], url, timestamp, timestamp),
+        (notification_id, event_type, title or ("沈砚来电" if event_type == "call" else "沈砚"), body[:500], url, timestamp, timestamp),
     )
     return notification_id
 
