@@ -238,6 +238,12 @@ export async function replyInCall(id:string,text:string,signal?:AbortSignal):Pro
   return response.json();
 }
 
+export async function extractCallMemories(id:string):Promise<{created:number;items:Memory[];cached:boolean}>{
+  const response=await apiFetch(`${API_BASE}/api/calls/${id}/memory-candidates`,{method:'POST'});
+  if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'通话记忆整理失败');
+  return response.json();
+}
+
 export interface CompanionSettings {enabled:boolean;allow_calls:boolean;dnd_enabled:boolean;dnd_start:string;dnd_end:string;timezone:string}
 export async function loadCompanionSettings():Promise<CompanionSettings>{
   const response=await apiFetch(`${API_BASE}/api/companion/settings`);if(!response.ok)throw new Error('读取主动陪伴设置失败');return response.json();

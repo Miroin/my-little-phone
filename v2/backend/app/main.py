@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 from .chat_import import build_router as build_chat_import_router, install_schema as install_import_schema
 from .backup import build_router as build_backup_router
-from .memory_extract import build_router as build_memory_extract_router, install_extraction_schema
+from .memory_extract import build_router as build_memory_extract_router, install_extraction_schema, parse_candidate_payload
 from .persona import build_system_prompt, detect_scene
 from .voice import build_router as build_voice_router, install_voice_schema
 from .proactive import build_router as build_proactive_router, install_proactive_schema
@@ -667,6 +667,73 @@ async def reply_in_call(call_id: str, body: CallReply) -> dict:
         raise HTTPException(status_code=502, detail="通话回复格式错误") from exc
     assistant_turn = add_call_turn(call_id, CallTurnCreate(speaker="assistant", text=answer))
     return {"user": user_turn, "assistant": assistant_turn, "memoryIds": [row["id"] for row, _ in selected]}
+
+
+@app.post("/api/calls/{call_id}/memory-candidates")
+async def extract_call_memories(call_id: str) -> dict:
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="服务端尚未配置 DeepSeek API Key")
+    job_id = f"call-memory:{call_id}"
+    with db() as connection:
+        call = connection.execute("SELECT * FROM calls WHERE id=? AND status='answered'", (call_id,)).fetchone()
+        if not call:
+            raise HTTPException(status_code=404, detail="通话尚未正常结束")
+        existing = connection.execute("SELECT * FROM memory_jobs WHERE id=?", (job_id,)).fetchone()
+        if existing and existing["status"] == "done":
+            rows = connection.execute("SELECT * FROM memory_items WHERE source_type='call' AND source_id=? ORDER BY created_at", (call_id,)).fetchall()
+            return {"created": 0, "items": [memory_dict(row) for row in rows], "cached": True}
+        turns = json.loads(call["turns_json"] or "[]")
+        if len(turns) < 2:
+            return {"created": 0, "items": [], "cached": False}
+        timestamp = now()
+        payload = json.dumps({"callId": call_id, "turns": len(turns)}, ensure_ascii=False)
+        connection.execute(
+            """INSERT INTO memory_jobs VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
+            status='running',attempts=memory_jobs.attempts+1,last_error=NULL,payload_json=excluded.payload_json,updated_at=excluded.updated_at""",
+            (job_id, "call_extract", "running", None, 1, None, payload, timestamp, timestamp),
+        )
+    transcript = "\n".join(f"{'陈钰' if turn['speaker']=='user' else '沈砚'}：{turn['text']}" for turn in turns)[:50000]
+    prompt = f"""从这次真实电话中提取少量值得长期保留的记忆候选。普通寒暄不要提取，不要编造。
+分类只能是 relationship、user、event、feeling、plan、sample。
+返回严格 JSON：{{"candidates":[{{"layer":"event","summary":"简洁事实","evidence":"支持该事实的电话原文","confidence":0.8}}]}}。
+没有值得保留的内容就返回 {{"candidates":[]}}。
+电话原文：
+{transcript}"""
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(
+                os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/chat/completions"),
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={"model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"), "messages": [{"role": "user", "content": prompt}], "temperature": 0.15, "response_format": {"type": "json_object"}},
+            )
+        response.raise_for_status()
+        candidates = parse_candidate_payload(response.json()["choices"][0]["message"]["content"])
+        created_ids: list[str] = []
+        with db() as connection:
+            for candidate in candidates:
+                memory_id, timestamp = new_id(), now()
+                digest = content_hash(candidate["summary"])
+                cursor = connection.execute(
+                    """INSERT OR IGNORE INTO memory_items(id,layer,content,summary,status,importance,confidence,occurred_at,
+                    created_at,updated_at,source_type,source_id,source_hash,tags_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (memory_id, candidate["layer"], candidate["summary"], candidate["summary"], "candidate", 7.0,
+                     candidate["confidence"], call["ended_at"], timestamp, timestamp, "call", call_id, digest, "[]"),
+                )
+                if cursor.rowcount:
+                    evidence = candidate["evidence"][:50000]
+                    connection.execute(
+                        "INSERT INTO memory_evidence VALUES(?,?,?,?,?,?,?,?)",
+                        (new_id(), memory_id, call_id, turns[0].get("messageId"), turns[-1].get("messageId"), evidence, content_hash(evidence), timestamp),
+                    )
+                    created_ids.append(memory_id)
+            connection.execute("UPDATE memory_jobs SET status='done',cursor=?,updated_at=? WHERE id=?", (str(len(candidates)), now(), job_id))
+            rows = [connection.execute("SELECT * FROM memory_items WHERE id=?", (memory_id,)).fetchone() for memory_id in created_ids]
+        return {"created": len(rows), "items": [memory_dict(row) for row in rows], "cached": False}
+    except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        with db() as connection:
+            connection.execute("UPDATE memory_jobs SET status='failed',last_error=?,updated_at=? WHERE id=?", (str(exc)[:500], now(), job_id))
+        raise HTTPException(status_code=502, detail="通话记忆提取暂时失败，可以稍后重试") from exc
 
 
 @app.post("/api/chat/stream")
