@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 db_path = Path(__file__).parent / "data" / "test-chat-run.db"
@@ -24,5 +25,20 @@ assert cached == assistant["text"]
 with main.db() as connection:
     assert connection.execute("SELECT COUNT(*) FROM messages WHERE speaker='user'").fetchone()[0] == 1
     assert connection.execute("SELECT status FROM chat_runs WHERE id=?", (run_id,)).fetchone()[0] == "complete"
+
+# 消息接口从最新一页开始，并能继续向前读取，不再卡在固定 500 条。
+base = datetime(2030, 1, 1, tzinfo=timezone.utc)
+with main.db() as connection:
+    for index in range(120):
+        connection.execute(
+            "INSERT INTO messages VALUES(?,?,?,?,?,?)",
+            (f"history-{index:03d}", "user", "text", f"历史消息 {index}", (base + timedelta(seconds=index)).isoformat(), None),
+        )
+recent = main.messages(limit=100, offset=0)
+older = main.messages(limit=100, offset=100)
+assert recent[0]["id"] == "history-020"
+assert recent[-1]["id"] == "history-119"
+assert {item["id"] for item in recent}.isdisjoint({item["id"] for item in older})
+assert any(item["id"] == user["id"] for item in older)
 
 print("chat run idempotency test passed")

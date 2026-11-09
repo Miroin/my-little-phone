@@ -27,8 +27,8 @@ export async function loadMedia():Promise<MediaAsset[]>{const response=await api
 export async function uploadMedia(file:File,title=''):Promise<MediaAsset>{const body=new FormData();body.append('file',file);body.append('title',title);const response=await apiFetch(`${API_BASE}/api/life/media`,{method:'POST',body});if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'上传图片失败');const item:MediaAsset=await response.json();return {...item,url:await assetObjectUrl(item.url)};}
 export async function deleteMedia(id:string):Promise<void>{const response=await apiFetch(`${API_BASE}/api/life/media/${id}`,{method:'DELETE'});if(!response.ok)throw new Error('删除照片失败');}
 
-export async function loadMessages():Promise<Message[]> {
-  const response=await apiFetch(`${API_BASE}/api/messages`);
+export async function loadMessages(limit=100,offset=0):Promise<Message[]> {
+  const response=await apiFetch(`${API_BASE}/api/messages?limit=${limit}&offset=${offset}`);
   if(!response.ok) throw new Error('读取聊天失败');
   const items:Message[]=await response.json();
   return Promise.all(items.map(async message=>{

@@ -7,7 +7,7 @@ import sqlite3
 from pathlib import Path
 from typing import Callable
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import FileResponse
 
 
@@ -123,6 +123,37 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
             with db_factory() as connection:
                 connection.execute("UPDATE audio_assets SET status='failed',error=?,updated_at=? WHERE id=?", (str(exc)[:500], now(), asset_id))
             raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @router.post("/pending")
+    async def synthesize_pending(
+        limit: int = Query(default=3, ge=1, le=10),
+        x_scheduler_token: str | None = Header(default=None),
+    ) -> dict:
+        """Prepare proactive voice notes before their notification is delivered."""
+        expected = os.getenv("SCHEDULER_TOKEN", "").strip()
+        if not expected or x_scheduler_token != expected:
+            raise HTTPException(status_code=401, detail="调度凭证无效")
+        if not os.getenv("MINIMAX_API_KEY", "").strip() or not os.getenv("MINIMAX_VOICE_ID", "").strip():
+            return {"found": 0, "ready": 0, "failed": 0, "errors": [], "skipped": "MiniMax 尚未配置"}
+        with db_factory() as connection:
+            install_voice_schema(connection)
+            rows = connection.execute(
+                """SELECT m.id FROM messages m JOIN proactive_events p ON p.message_id=m.id
+                LEFT JOIN audio_assets a ON a.message_id=m.id
+                WHERE p.event_type='voice' AND p.status='sent' AND m.speaker='assistant' AND a.id IS NULL AND
+                (LOWER(LTRIM(m.text)) LIKE '[voice]%' OR LOWER(LTRIM(m.text)) LIKE '[[voice]]%' OR LTRIM(m.text) LIKE '【voice】%')
+                ORDER BY m.created_at LIMIT ?""", (limit,),
+            ).fetchall()
+        ready = failed = 0
+        errors: list[str] = []
+        for row in rows:
+            try:
+                await synthesize_message(row["id"])
+                ready += 1
+            except HTTPException as exc:
+                failed += 1
+                errors.append(str(exc.detail)[:200])
+        return {"found": len(rows), "ready": ready, "failed": failed, "errors": errors}
 
     @router.get("/messages/{message_id}")
     def message_audio(message_id: str) -> dict:

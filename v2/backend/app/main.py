@@ -407,15 +407,18 @@ def service_readiness() -> dict:
 
 
 @app.get("/api/messages")
-def messages() -> list[dict]:
+def messages(limit: int = Query(default=100, ge=1, le=500), offset: int = Query(default=0, ge=0)) -> list[dict]:
     with db() as connection:
         connection.execute("""CREATE TABLE IF NOT EXISTS audio_assets(
         id TEXT PRIMARY KEY,message_id TEXT NOT NULL UNIQUE,path TEXT NOT NULL,mime_type TEXT NOT NULL,
         duration_ms INTEGER NOT NULL DEFAULT 0,transcript TEXT NOT NULL,status TEXT NOT NULL,error TEXT,
         created_at TEXT NOT NULL,updated_at TEXT NOT NULL)""")
         rows = connection.execute(
-            """SELECT m.*,a.id audio_id,a.duration_ms,a.status voice_status FROM messages m
-            LEFT JOIN audio_assets a ON a.message_id=m.id ORDER BY m.created_at ASC LIMIT 500"""
+            """SELECT * FROM (
+            SELECT m.*,a.id audio_id,a.duration_ms,a.status voice_status FROM messages m
+            LEFT JOIN audio_assets a ON a.message_id=m.id
+            ORDER BY m.created_at DESC,m.id DESC LIMIT ? OFFSET ?
+            ) ORDER BY created_at ASC,id ASC""", (limit, offset),
         ).fetchall()
         return [message_dict(row) for row in rows]
 
