@@ -7,7 +7,7 @@ import sqlite3
 from pathlib import Path
 from typing import Callable
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
 
@@ -76,25 +76,41 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
     audio_dir = Path(os.getenv("MLP_AUDIO_PATH", root / "data" / "audio"))
 
     @router.post("/messages/{message_id}")
-    async def synthesize_message(message_id: str) -> dict:
+    async def synthesize_message(message_id: str, retry: bool = Query(default=False)) -> dict:
         with db_factory() as connection:
             install_voice_schema(connection)
-            existing = connection.execute("SELECT * FROM audio_assets WHERE message_id=? AND status='ready'", (message_id,)).fetchone()
+            existing = connection.execute("SELECT * FROM audio_assets WHERE message_id=?", (message_id,)).fetchone()
             if existing:
-                return {**dict(existing), "audioUrl": f"/api/voice/assets/{existing['id']}/audio"}
+                if existing["status"] == "ready":
+                    return {**dict(existing), "audioUrl": f"/api/voice/assets/{existing['id']}/audio"}
+                if existing["status"] == "generating":
+                    raise HTTPException(status_code=409, detail="这条语音正在生成，请稍后刷新")
+                if not retry:
+                    raise HTTPException(status_code=409, detail="上次语音生成失败，需要手动重试")
             message = connection.execute("SELECT * FROM messages WHERE id=? AND speaker='assistant'", (message_id,)).fetchone()
             if not message:
                 raise HTTPException(status_code=404, detail="没有找到沈砚的这条消息")
             marked, transcript = voice_text(message["text"])
             if not marked:
                 raise HTTPException(status_code=409, detail="这条回复没有选择发送语音")
-            asset_id, timestamp = new_id(), now()
+            asset_id, timestamp = (existing["id"] if existing else new_id()), now()
             audio_dir.mkdir(parents=True, exist_ok=True)
-            path = audio_dir / f"{asset_id}.mp3"
-            connection.execute(
-                "INSERT OR REPLACE INTO audio_assets VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                (asset_id, message_id, str(path), "audio/mpeg", 0, transcript, "generating", None, timestamp, timestamp),
-            )
+            path = Path(existing["path"]) if existing else audio_dir / f"{asset_id}.mp3"
+            if existing:
+                claimed = connection.execute(
+                    "UPDATE audio_assets SET status='generating',error=NULL,updated_at=? WHERE id=? AND status='failed'",
+                    (timestamp, asset_id),
+                )
+                if not claimed.rowcount:
+                    raise HTTPException(status_code=409, detail="这条语音正在由另一个请求处理")
+            else:
+                try:
+                    connection.execute(
+                        "INSERT INTO audio_assets VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                        (asset_id, message_id, str(path), "audio/mpeg", 0, transcript, "generating", None, timestamp, timestamp),
+                    )
+                except sqlite3.IntegrityError as exc:
+                    raise HTTPException(status_code=409, detail="这条语音正在由另一个请求处理") from exc
         try:
             audio, duration_ms = await _minimax_synthesize(transcript)
             path.write_bytes(audio)

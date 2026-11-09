@@ -42,10 +42,10 @@ export async function loadMessages():Promise<Message[]> {
 
 type VoiceResult={audioUrl:string;duration_ms:number;transcript:string};
 const voiceJobs=new Map<string,Promise<VoiceResult>>();
-export function synthesizeVoice(messageId:string):Promise<VoiceResult>{
-  const running=voiceJobs.get(messageId);if(running)return running;
-  const job=(async()=>{const response=await apiFetch(`${API_BASE}/api/voice/messages/${messageId}`,{method:'POST'});if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'语音生成失败');const result=await response.json();return {...result,audioUrl:await assetObjectUrl(result.audioUrl)};})();
-  voiceJobs.set(messageId,job);job.then(()=>voiceJobs.delete(messageId),()=>voiceJobs.delete(messageId));return job;
+export function synthesizeVoice(messageId:string,retry=false):Promise<VoiceResult>{
+  const key=`${messageId}:${retry?'retry':'normal'}`,running=voiceJobs.get(key);if(running)return running;
+  const job=(async()=>{const response=await apiFetch(`${API_BASE}/api/voice/messages/${messageId}${retry?'?retry=true':''}`,{method:'POST'});if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'语音生成失败');const result=await response.json();return {...result,audioUrl:await assetObjectUrl(result.audioUrl)};})();
+  voiceJobs.set(key,job);job.then(()=>voiceJobs.delete(key),()=>voiceJobs.delete(key));return job;
 }
 
 type StreamHandlers={
