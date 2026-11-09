@@ -63,6 +63,8 @@ assert event_status == "declined"
 
 # 挂断后只生成待确认候选；重复请求复用同一结果，不重复写入。
 class FakeResponse:
+    is_error = False
+
     def raise_for_status(self):
         return None
 
@@ -86,6 +88,12 @@ class FakeClient:
         return False
 
     async def post(self, *_args, **_kwargs):
+        messages = _kwargs.get("json", {}).get("messages", [])
+        if messages and messages[-1].get("content") == "（电话接通）":
+            return type("OpeningResponse", (), {
+                "is_error": False,
+                "json": lambda self: {"choices": [{"message": {"content": "喂，怎么突然想起给我打电话了？"}}]},
+            })()
         return FakeResponse()
 
 
@@ -93,6 +101,14 @@ real_client = main.httpx.AsyncClient
 os.environ["DEEPSEEK_API_KEY"] = "test-key"
 main.httpx.AsyncClient = FakeClient
 try:
+    outgoing = main.start_call(main.CallStart(direction="outgoing"))
+    opening = asyncio.run(main.open_outgoing_call(outgoing["id"]))
+    assert opening["assistant"]["text"].startswith("喂")
+    assert opening["cached"] is False
+    cached_opening = asyncio.run(main.open_outgoing_call(outgoing["id"]))
+    assert cached_opening["cached"] is True
+    assert cached_opening["assistant"] == opening["assistant"]
+
     extracted = asyncio.run(main.extract_call_memories(call["id"]))
     assert extracted["created"] == 1
     assert extracted["items"][0]["status"] == "candidate"

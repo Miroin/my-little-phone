@@ -615,6 +615,57 @@ def answer_call(call_id: str) -> dict:
     return call_dict(row)
 
 
+@app.post("/api/calls/{call_id}/opening")
+async def open_outgoing_call(call_id: str) -> dict:
+    """Let Shen Yan answer an outgoing call once, then reuse that turn after retries."""
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="服务端尚未配置 DeepSeek API Key")
+    with db() as connection:
+        call = connection.execute(
+            "SELECT * FROM calls WHERE id=? AND direction='outgoing' AND status='active'", (call_id,),
+        ).fetchone()
+        if not call:
+            raise HTTPException(status_code=404, detail="没有找到正在进行的拨出电话")
+        turns = json.loads(call["turns_json"] or "[]")
+        if turns:
+            first = turns[0]
+            return {"assistant": {"messageId": first.get("messageId"), "text": first["text"]}, "cached": True}
+        recent = connection.execute(
+            "SELECT speaker,text FROM messages WHERE call_id IS NULL ORDER BY created_at DESC LIMIT 12"
+        ).fetchall()[::-1]
+        query = "陈钰刚刚主动给沈砚打来电话"
+        selected = retrieve_memories(connection, query, 6)
+        profiles = profile_prompt(connection, now)
+        worldbook = worldbook_prompt(connection, "\n".join(row["text"] for row in recent))
+        feedback = interaction_feedback(connection, "daily")
+    memories = [*profiles, *worldbook, *[f"[{row['layer']}] {row['summary'] or row['content']}" for row, _ in selected], *feedback]
+    system = build_system_prompt(detect_scene(query), memories) + (
+        "\n陈钰刚主动拨通了你的电话。你先自然接电话，说一到两句简短口语。"
+        "可以结合最近的事回应，但不要写动作、括号、旁白、标签，也不要解释规则。"
+    )
+    payload = {
+        "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+        "messages": [{"role": "system", "content": system}, *[
+            {"role": "user" if row["speaker"] == "user" else "assistant", "content": row["text"]} for row in recent
+        ], {"role": "user", "content": "（电话接通）"}],
+        "temperature": 0.85,
+    }
+    async with httpx.AsyncClient(timeout=60) as client:
+        response = await client.post(
+            os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/chat/completions"),
+            headers={"Authorization": f"Bearer {api_key}"}, json=payload,
+        )
+    if response.is_error:
+        raise HTTPException(status_code=502, detail="电话接通了，但开场暂时没有生成")
+    try:
+        answer = response.json()["choices"][0]["message"]["content"].strip()
+    except (KeyError, IndexError, TypeError, AttributeError) as exc:
+        raise HTTPException(status_code=502, detail="电话开场返回格式错误") from exc
+    turn = add_call_turn(call_id, CallTurnCreate(speaker="assistant", text=answer))
+    return {"assistant": {"messageId": turn["messageId"], "text": answer}, "cached": False}
+
+
 @app.post("/api/calls/{call_id}/end")
 def end_call(call_id: str, body: CallEnd) -> dict:
     ended = datetime.now(timezone.utc)

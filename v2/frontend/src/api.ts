@@ -237,6 +237,11 @@ export async function answerCall(id:string):Promise<CallRecord>{
   if(!response.ok)throw new Error('接听失败');
   return response.json();
 }
+export async function openOutgoingCall(id:string):Promise<{assistant:{messageId:string;text:string};cached:boolean}>{
+  const response=await apiFetch(`${API_BASE}/api/calls/${id}/opening`,{method:'POST'});
+  if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'电话接通失败');
+  return response.json();
+}
 export async function replyInCall(id:string,text:string,signal?:AbortSignal):Promise<{user:{messageId:string;text:string};assistant:{messageId:string;text:string}}>{
   const response=await apiFetch(`${API_BASE}/api/calls/${id}/reply`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text}),signal});
   if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'通话回复中断');
