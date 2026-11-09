@@ -33,27 +33,53 @@ def install_extraction_schema(connection: sqlite3.Connection) -> None:
             last_error TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_extraction_jobs_batch ON extraction_jobs(batch_id,status,updated_at);
+        CREATE TABLE IF NOT EXISTS extraction_chunks(
+            conversation_id TEXT NOT NULL,chunk_index INTEGER NOT NULL,start_ordinal INTEGER NOT NULL,
+            end_ordinal INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT,updated_at TEXT NOT NULL,
+            PRIMARY KEY(conversation_id,chunk_index)
+        );
+        CREATE INDEX IF NOT EXISTS idx_extraction_chunks_status ON extraction_chunks(status,conversation_id,chunk_index);
         """
     )
 
 
+def populate_extraction_chunks(connection: sqlite3.Connection, batch_id: str, timestamp: str, chunk_size: int = 20) -> int:
+    conversations = connection.execute(
+        "SELECT id,message_count FROM imported_conversations WHERE batch_id=?", (batch_id,),
+    ).fetchall()
+    for conversation in conversations:
+        count = conversation["message_count"] or connection.execute(
+            "SELECT COUNT(*) FROM imported_messages WHERE conversation_id=?", (conversation["id"],),
+        ).fetchone()[0]
+        for index, start in enumerate(range(0, count, chunk_size)):
+            connection.execute(
+                "INSERT OR IGNORE INTO extraction_chunks VALUES(?,?,?,?, 'pending',0,NULL,?)",
+                (conversation["id"], index, start, min(count - 1, start + chunk_size - 1), timestamp),
+            )
+    return connection.execute(
+        """SELECT COUNT(*) FROM extraction_chunks WHERE conversation_id IN
+        (SELECT id FROM imported_conversations WHERE batch_id=?)""", (batch_id,),
+    ).fetchone()[0]
+
+
 def queued_conversations(connection: sqlite3.Connection, batch_id: str, limit: int) -> list[sqlite3.Row]:
     return connection.execute(
-        """SELECT c.* FROM imported_conversations c
-        LEFT JOIN extraction_runs r ON r.conversation_id=c.id
-        WHERE c.batch_id=? AND (r.conversation_id IS NULL OR r.status='retry')
-        ORDER BY COALESCE(c.created_at,'') ASC LIMIT ?""",
+        """SELECT c.*,x.chunk_index,x.start_ordinal,x.end_ordinal FROM extraction_chunks x
+        JOIN imported_conversations c ON c.id=x.conversation_id
+        WHERE c.batch_id=? AND x.status IN ('pending','retry')
+        ORDER BY COALESCE(c.created_at,'') ASC,x.chunk_index ASC LIMIT ?""",
         (batch_id, limit),
     ).fetchall()
 
 
 def extraction_queue_counts(connection: sqlite3.Connection, batch_id: str) -> tuple[int, int]:
     remaining = connection.execute(
-        """SELECT COUNT(*) FROM imported_conversations c LEFT JOIN extraction_runs r ON r.conversation_id=c.id
-        WHERE c.batch_id=? AND (r.conversation_id IS NULL OR r.status='retry')""", (batch_id,),
+        """SELECT COUNT(*) FROM extraction_chunks WHERE status IN ('pending','retry') AND conversation_id IN
+        (SELECT id FROM imported_conversations WHERE batch_id=?)""", (batch_id,),
     ).fetchone()[0]
     failed = connection.execute(
-        """SELECT COUNT(*) FROM extraction_runs WHERE status='failed' AND conversation_id IN
+        """SELECT COUNT(*) FROM extraction_chunks WHERE status='failed' AND conversation_id IN
         (SELECT id FROM imported_conversations WHERE batch_id=?)""", (batch_id,),
     ).fetchone()[0]
     return remaining, failed
@@ -100,7 +126,7 @@ def extraction_prompt(title: str, messages: list[sqlite3.Row]) -> str:
 
 会话标题：{title}
 聊天原文：
-{transcript[:24000]}"""
+{transcript[:50000]}"""
 
 
 def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[], str], new_id: Callable[[], str]) -> APIRouter:
@@ -112,16 +138,21 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
             install_extraction_schema(connection)
             if not connection.execute("SELECT 1 FROM import_batches WHERE id=? AND status='previewed'", (batch_id,)).fetchone():
                 raise HTTPException(status_code=404, detail="没有找到已读取完成的历史聊天")
+            timestamp = now()
+            total = populate_extraction_chunks(connection, batch_id, timestamp)
             existing = connection.execute(
                 "SELECT * FROM extraction_jobs WHERE batch_id=? AND status IN ('ready','running','paused','needs_retry') ORDER BY created_at DESC LIMIT 1", (batch_id,)
             ).fetchone()
             if existing:
-                return dict(existing)
-            total = connection.execute("SELECT COUNT(*) FROM imported_conversations WHERE batch_id=?", (batch_id,)).fetchone()[0]
-            job_id, timestamp = new_id(), now()
+                connection.execute("UPDATE extraction_jobs SET total=?,updated_at=? WHERE id=?", (total, timestamp, existing["id"]))
+                return dict(connection.execute("SELECT * FROM extraction_jobs WHERE id=?", (existing["id"],)).fetchone())
+            remaining, failed = extraction_queue_counts(connection, batch_id)
+            completed = max(0, total - remaining - failed)
+            status = "needs_retry" if failed and not remaining else ("complete" if total and completed == total else "ready")
+            job_id = new_id()
             connection.execute(
                 "INSERT INTO extraction_jobs VALUES(?,?,?,?,?,?,?,?,?,?)",
-                (job_id, batch_id, "ready", total, 0, 0, 0, None, timestamp, timestamp),
+                (job_id, batch_id, status, total, completed, failed, 0, None, timestamp, timestamp),
             )
             row = connection.execute("SELECT * FROM extraction_jobs WHERE id=?", (job_id,)).fetchone()
         return dict(row)
@@ -153,6 +184,11 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
                     "UPDATE extraction_runs SET status='retry' WHERE status='failed' AND conversation_id IN (SELECT id FROM imported_conversations WHERE batch_id=?)",
                     (batch_id,),
                 )
+                connection.execute(
+                    """UPDATE extraction_chunks SET status='retry',last_error=NULL,updated_at=? WHERE status='failed'
+                    AND conversation_id IN (SELECT id FROM imported_conversations WHERE batch_id=?)""",
+                    (now(), batch_id),
+                )
             row = connection.execute("SELECT * FROM extraction_jobs WHERE id=?", (job_id,)).fetchone()
         return dict(row)
 
@@ -163,6 +199,7 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
             raise HTTPException(status_code=503, detail="服务端尚未配置 DeepSeek API Key")
         with db_factory() as connection:
             install_extraction_schema(connection)
+            populate_extraction_chunks(connection, batch_id, now())
             if job_id:
                 job = connection.execute("SELECT * FROM extraction_jobs WHERE id=? AND batch_id=?", (job_id, batch_id)).fetchone()
                 if not job:
@@ -196,8 +233,9 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
                         break
                 with db_factory() as connection:
                     messages = connection.execute(
-                        "SELECT * FROM imported_messages WHERE conversation_id=? ORDER BY ordinal LIMIT 80",
-                        (conversation["id"],),
+                        """SELECT * FROM imported_messages WHERE conversation_id=? AND ordinal BETWEEN ? AND ?
+                        ORDER BY ordinal""",
+                        (conversation["id"], conversation["start_ordinal"], conversation["end_ordinal"]),
                     ).fetchall()
                 try:
                     response = await client.post(
@@ -223,13 +261,33 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
                             )
                             created += cursor.rowcount
                         connection.execute(
-                            "INSERT INTO extraction_runs VALUES(?,?,?,?,?,?) ON CONFLICT(conversation_id) DO UPDATE SET status='done',attempts=extraction_runs.attempts+1,candidate_count=excluded.candidate_count,last_error=NULL,updated_at=excluded.updated_at",
-                            (conversation["id"], "done", 1, len(items), None, now()),
+                            """UPDATE extraction_chunks SET status='done',attempts=attempts+1,last_error=NULL,updated_at=?
+                            WHERE conversation_id=? AND chunk_index=?""",
+                            (now(), conversation["id"], conversation["chunk_index"]),
+                        )
+                        unfinished = connection.execute(
+                            "SELECT COUNT(*) FROM extraction_chunks WHERE conversation_id=? AND status!='done'", (conversation["id"],),
+                        ).fetchone()[0]
+                        candidate_count = connection.execute(
+                            "SELECT COUNT(*) FROM memory_candidates WHERE conversation_id=?", (conversation["id"],),
+                        ).fetchone()[0]
+                        run_status = "done" if unfinished == 0 else "running"
+                        connection.execute(
+                            """INSERT INTO extraction_runs VALUES(?,?,?,?,?,?) ON CONFLICT(conversation_id) DO UPDATE SET
+                            status=excluded.status,attempts=extraction_runs.attempts+1,candidate_count=excluded.candidate_count,
+                            last_error=NULL,updated_at=excluded.updated_at""",
+                            (conversation["id"], run_status, 1, candidate_count, None, now()),
                         )
                     processed += 1
                 except (httpx.HTTPError, KeyError, ValueError, json.JSONDecodeError) as exc:
-                    errors.append(conversation["title"])
+                    label = f"{conversation['title']}（第 {conversation['chunk_index'] + 1} 段）"
+                    errors.append(label)
                     with db_factory() as connection:
+                        connection.execute(
+                            """UPDATE extraction_chunks SET status='failed',attempts=attempts+1,last_error=?,updated_at=?
+                            WHERE conversation_id=? AND chunk_index=?""",
+                            (str(exc)[:500], now(), conversation["id"], conversation["chunk_index"]),
+                        )
                         connection.execute(
                             "INSERT INTO extraction_runs VALUES(?,?,?,?,?,?) ON CONFLICT(conversation_id) DO UPDATE SET status='failed',attempts=extraction_runs.attempts+1,last_error=excluded.last_error,updated_at=excluded.updated_at",
                             (conversation["id"], "failed", 1, 0, str(exc)[:500], now()),
@@ -241,9 +299,9 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
                 remaining, failed_total = extraction_queue_counts(connection, batch_id)
                 status = ("needs_retry" if failed_total else "complete") if remaining == 0 else "ready"
                 connection.execute(
-                    """UPDATE extraction_jobs SET status=?,processed=processed+?,failed=failed+?,created=created+?,
+                    """UPDATE extraction_jobs SET status=?,processed=processed+?,failed=?,created=created+?,
                     last_error=?,updated_at=? WHERE id=?""",
-                    (status, processed, len(errors), created, (", ".join(errors[:3]) or None), now(), job_id),
+                    (status, processed, failed_total, created, (", ".join(errors[:3]) or None), now(), job_id),
                 )
                 result["complete"] = status == "complete"
                 result["job"] = dict(connection.execute("SELECT * FROM extraction_jobs WHERE id=?", (job_id,)).fetchone())

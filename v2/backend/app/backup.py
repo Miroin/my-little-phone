@@ -16,7 +16,7 @@ BACKUP_TABLES = (
     "messages", "memories", "calls", "memory_items", "memory_evidence", "memory_jobs",
     "memory_feedback", "memory_usage", "import_batches", "imported_conversations",
     "imported_messages", "memory_candidates", "memory_candidate_conflicts",
-    "extraction_runs", "extraction_jobs", "chat_runs", "audio_assets", "character_profiles",
+    "extraction_runs", "extraction_jobs", "extraction_chunks", "chat_runs", "audio_assets", "character_profiles",
     "companion_settings", "proactive_events",
     "life_notes", "media_assets",
 )
