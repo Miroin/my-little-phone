@@ -12,6 +12,8 @@ import httpx
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 from .notifications import enqueue_notification
+from .persona import CORE_PERSONA, INTERACTION, RELATIONSHIP
+from .profiles import profile_prompt
 
 
 class CompanionSettings(BaseModel):
@@ -104,20 +106,37 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
             if pending:
                 return {"action": "wait", "reason": "上一条主动联系还没有回复，不连续打扰"}
             recent = connection.execute("SELECT speaker,text,created_at FROM messages ORDER BY created_at DESC LIMIT 16").fetchall()[::-1]
-            plans = connection.execute("SELECT summary,content FROM memory_items WHERE status='active' AND layer IN ('plan','event','relationship') ORDER BY importance DESC,updated_at DESC LIMIT 10").fetchall()
+            plans = connection.execute("SELECT layer,summary,content FROM memory_items WHERE status='active' AND layer IN ('plan','event','relationship','user','sample') ORDER BY importance DESC,updated_at DESC LIMIT 12").fetchall()
+            profiles = profile_prompt(connection, now)
+            feedback = connection.execute(
+                """SELECT f.verdict,f.reason,m.text FROM memory_feedback f JOIN messages m ON m.id=f.message_id
+                ORDER BY f.created_at DESC LIMIT 5"""
+            ).fetchall()
         api_key = os.getenv("DEEPSEEK_API_KEY")
         if not api_key:
             raise HTTPException(status_code=503, detail="服务端尚未配置 DeepSeek API Key")
         context = "\n".join(f"{'陈钰' if row['speaker']=='user' else '沈砚'}：{row['text']}" for row in recent)
-        memory = "\n".join(f"- {row['summary'] or row['content']}" for row in plans)
+        memory = "\n".join(f"- [{row['layer']}] {row['summary'] or row['content']}" for row in plans)
+        profile = "\n".join(f"- {item}" for item in profiles)
+        feedback_text = "\n".join(
+            f"- {'曾被认可' if row['verdict']=='like' else '需要避免'}：{row['text'][:200]}"
+            + (f"；原因：{row['reason'][:120]}" if row['reason'] else "") for row in feedback
+        )
         prompt = f"""你是沈砚的主动陪伴决策层。现在是 {local.strftime('%Y-%m-%d %H:%M %A')}。
+【核心人格】{CORE_PERSONA}
+【关系底色】{RELATIONSHIP}
+【互动判断】{INTERACTION}
 你比较黏人，可以没有特别事情也主动联系陈钰、分享生活、想念或延续话题；也可以自然提出通话。
 不要机械打卡，不要重复上一条，不要因为她没回复连续轰炸。没有合适内容就等待。
 只返回 JSON：{{"action":"message|voice|call|wait","text":"自然短消息、语音内容或来电开场","reason":"简短原因"}}。
 voice 表示他此刻更想直接发一条语音；只在语气、亲近感或当下情境确实适合时选择，不要每次都发语音。
 允许主动来电：{bool(settings['allow_calls'])}。如果不允许，不能选择 call。
+人物档案：
+{profile or '暂无补充档案'}
 相关约定：
 {memory or '暂无'}
+近期互动反馈（只学习判断和节奏，不照抄句子，也不把单次负评当全局命令）：
+{feedback_text or '暂无'}
 最近聊天：
 {context or '暂无最近聊天'}"""
         async with httpx.AsyncClient(timeout=60) as client:

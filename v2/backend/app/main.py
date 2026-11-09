@@ -569,11 +569,17 @@ def add_call_turn(call_id: str, body: CallTurnCreate) -> dict:
 @app.post("/api/calls/{call_id}/answer")
 def answer_call(call_id: str) -> dict:
     answered = now()
+    opener = None
     with db() as connection:
         cursor = connection.execute("UPDATE calls SET status='active',answered_at=? WHERE id=? AND status='ringing'", (answered, call_id))
         if not cursor.rowcount:
             raise HTTPException(status_code=404, detail="来电不存在或已经处理")
+        event = connection.execute("SELECT text FROM proactive_events WHERE call_id=? ORDER BY created_at DESC LIMIT 1", (call_id,)).fetchone()
+        opener = str(event["text"] or "").strip() if event else None
         connection.execute("UPDATE proactive_events SET status='answered',answered_at=? WHERE call_id=?", (now(), call_id))
+    if opener:
+        add_call_turn(call_id, CallTurnCreate(speaker="assistant", text=opener))
+    with db() as connection:
         row = connection.execute("SELECT * FROM calls WHERE id=?", (call_id,)).fetchone()
     return call_dict(row)
 

@@ -17,6 +17,7 @@ export interface CallTurn {
   speaker: Speaker;
   text: string;
   createdAt: string;
+  messageId?: string;
 }
 
 export interface CallRecord {

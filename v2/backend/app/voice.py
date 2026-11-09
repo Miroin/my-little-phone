@@ -91,7 +91,7 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
             if not message:
                 raise HTTPException(status_code=404, detail="没有找到沈砚的这条消息")
             marked, transcript = voice_text(message["text"])
-            if not marked:
+            if not marked and not message["call_id"]:
                 raise HTTPException(status_code=409, detail="这条回复没有选择发送语音")
             asset_id, timestamp = (existing["id"] if existing else new_id()), now()
             audio_dir.mkdir(parents=True, exist_ok=True)
@@ -106,7 +106,7 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
             else:
                 try:
                     connection.execute(
-                        "INSERT INTO audio_assets VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                        "INSERT INTO audio_assets VALUES(?,?,?,?,?,?,?,?,?,?)",
                         (asset_id, message_id, str(path), "audio/mpeg", 0, transcript, "generating", None, timestamp, timestamp),
                     )
                 except sqlite3.IntegrityError as exc:
