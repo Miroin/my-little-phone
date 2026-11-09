@@ -30,6 +30,7 @@
 
 - 部署持续运行的后端并填入 DeepSeek、MiniMax、VAPID 密钥。
 - 在 GitHub Actions 中填写后端地址和调度令牌，让仓库自带的定时工作流开始运行。
+- 将主动陪伴工作流随验收版本合并到仓库默认分支；GitHub 不会从仅存在于功能分支的 workflow 执行定时任务。
 - iOS 原生包签名、APNs、CallKit 和真机审核需要 Apple Developer Team、证书与 Mac/Xcode。
 - Android 系统级来电界面和商店签名需要 Android 构建/签名环境。
 - iPhone Safari 后台限制仍然存在：关闭网页后的主动联系依赖已安装 PWA、用户通知授权和持续运行的后端。
