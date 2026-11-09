@@ -460,6 +460,18 @@ def memory_evidence(memory_id: str) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+@app.delete("/api/memories/{memory_id}")
+def delete_memory(memory_id: str) -> dict:
+    """Permanently remove one user-selected memory and its derived references."""
+    with db() as connection:
+        if not connection.execute("SELECT 1 FROM memory_items WHERE id=?", (memory_id,)).fetchone():
+            raise HTTPException(status_code=404, detail="没有找到这条记忆")
+        connection.execute("DELETE FROM memory_usage WHERE memory_id=?", (memory_id,))
+        connection.execute("DELETE FROM memory_evidence WHERE memory_id=?", (memory_id,))
+        connection.execute("DELETE FROM memory_items WHERE id=?", (memory_id,))
+    return {"deleted": True, "id": memory_id}
+
+
 @app.get("/api/memory-search")
 def memory_search(q: str = Query(min_length=1, max_length=1000), limit: int = Query(default=8, ge=1, le=30)) -> list[dict]:
     with db() as connection:

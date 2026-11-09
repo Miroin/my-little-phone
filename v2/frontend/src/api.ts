@@ -108,6 +108,17 @@ export async function reinforceMemory(id:string):Promise<Memory>{
   return response.json();
 }
 
+export interface MemoryEvidence{id:string;memory_id:string;conversation_id?:string;message_start_id?:string;message_end_id?:string;raw_text:string;sha256:string;created_at:string}
+export async function loadMemoryEvidence(id:string):Promise<MemoryEvidence[]>{
+  const response=await apiFetch(`${API_BASE}/api/memories/${id}/evidence`);
+  if(!response.ok)throw new Error('读取原文证据失败');
+  return response.json();
+}
+export async function deleteMemory(id:string):Promise<void>{
+  const response=await apiFetch(`${API_BASE}/api/memories/${id}`,{method:'DELETE'});
+  if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'永久删除失败');
+}
+
 export async function uploadChatHistory(file:File):Promise<ImportBatch> {
   const body=new FormData();body.append('file',file);
   const response=await apiFetch(`${API_BASE}/api/history-imports/chatgpt`,{method:'POST',body});

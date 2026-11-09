@@ -35,5 +35,10 @@ reinforced = main.reinforce_memory(created["id"])
 assert abs(reinforced["confidence"] - 0.95) < 0.0001
 archived = main.update_memory_status(created["id"], main.MemoryStatusUpdate(status="archived"))
 assert archived["status"] == "archived"
+deleted = main.delete_memory(created["id"])
+assert deleted["deleted"] is True
+with main.db() as connection:
+    assert connection.execute("SELECT 1 FROM memory_items WHERE id=?", (created["id"],)).fetchone() is None
+    assert connection.execute("SELECT 1 FROM memory_evidence WHERE memory_id=?", (created["id"],)).fetchone() is None
 assert main.health()["memorySchema"] == 2
 print("memory smoke test passed")
