@@ -287,6 +287,28 @@ def retrieve_memories(connection: sqlite3.Connection, query: str, limit: int = 8
     return scored[:limit]
 
 
+def interaction_feedback(connection: sqlite3.Connection, scene: str, limit: int = 6) -> list[str]:
+    """Use feedback as bounded scene hints, never as unverified persona facts."""
+    rows = connection.execute(
+        """SELECT f.verdict,f.reason,m.text,COALESCE(r.scene,f.scene) actual_scene
+        FROM memory_feedback f JOIN messages m ON m.id=f.message_id
+        LEFT JOIN chat_runs r ON r.assistant_message_id=f.message_id
+        WHERE COALESCE(r.scene,f.scene)=? OR f.scene='chat'
+        ORDER BY CASE WHEN COALESCE(r.scene,f.scene)=? THEN 0 ELSE 1 END,f.created_at DESC LIMIT ?""",
+        (scene, scene, limit),
+    ).fetchall()
+    hints: list[str] = []
+    for row in rows:
+        reply = re.sub(r"\s+", " ", row["text"]).strip()[:240]
+        if row["verdict"] == "like":
+            hints.append(f"[同类情境曾被认可] {reply}（学习回应判断与节奏，不照抄句子）")
+        else:
+            reason = re.sub(r"\s+", " ", row["reason"] or "").strip()[:160]
+            suffix = f"；陈钰指出：{reason}" if reason else ""
+            hints.append(f"[同类情境需要避免] {reply}{suffix}（这是修正信号，不是新的角色事实）")
+    return hints
+
+
 def sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
@@ -313,14 +335,15 @@ def prepare_chat(body: ChatRequest) -> tuple[dict, list[sqlite3.Row], list[tuple
                 (run_id, user["id"], "pending", scene.name, user["createdAt"], user["createdAt"]),
             )
         recent = list(connection.execute("SELECT speaker,text FROM messages ORDER BY created_at DESC LIMIT 24"))[::-1]
+        scene = detect_scene(user["text"])
         selected = retrieve_memories(connection, user["text"], 8)
         profiles = profile_prompt(connection, now)
+        feedback = interaction_feedback(connection, scene.name)
         legacy = [] if selected else connection.execute("SELECT category,text FROM memories WHERE active=1 ORDER BY created_at DESC LIMIT 8").fetchall()
     prompt_memories = [f"[{row['layer']}] {row['summary'] or row['content']}" for row, _ in selected]
     if not prompt_memories:
         prompt_memories = [f"[旧版/{item['category']}] {item['text']}" for item in legacy]
-    prompt_memories = [*profiles, *prompt_memories]
-    scene = detect_scene(user["text"])
+    prompt_memories = [*profiles, *prompt_memories, *feedback]
     payload = {
         "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
         "messages": [{"role": "system", "content": build_system_prompt(scene, prompt_memories)}, *[
@@ -501,14 +524,16 @@ def get_memory_job(job_id: str) -> dict:
 def create_feedback(body: FeedbackCreate) -> dict:
     feedback_id, timestamp = new_id(), now()
     with db() as connection:
-        connection.execute("INSERT INTO memory_feedback VALUES(?,?,?,?,?,?)", (feedback_id, body.message_id, body.scene, body.verdict, body.reason.strip(), timestamp))
+        run = connection.execute("SELECT scene FROM chat_runs WHERE assistant_message_id=?", (body.message_id,)).fetchone()
+        scene = run["scene"] if run else body.scene
+        connection.execute("INSERT INTO memory_feedback VALUES(?,?,?,?,?,?)", (feedback_id, body.message_id, scene, body.verdict, body.reason.strip(), timestamp))
         delta = 0.03 if body.verdict == "like" else -0.03
         connection.execute(
             """UPDATE memory_items SET confidence=MAX(0,MIN(1,confidence+?)),updated_at=?
             WHERE layer IN ('sample','relationship') AND id IN (SELECT memory_id FROM memory_usage WHERE message_id=?)""",
             (delta, timestamp, body.message_id),
         )
-    return {"id": feedback_id, **body.model_dump(), "createdAt": timestamp}
+    return {"id": feedback_id, **body.model_dump(), "scene": scene, "createdAt": timestamp}
 
 
 @app.get("/api/calls")
@@ -580,6 +605,7 @@ async def reply_in_call(call_id: str, body: CallReply) -> dict:
     if not api_key:
         raise HTTPException(status_code=503, detail="服务端尚未配置 DeepSeek API Key")
     user_turn = add_call_turn(call_id, CallTurnCreate(speaker="user", text=body.text))
+    scene = detect_scene(body.text)
     with db() as connection:
         call = connection.execute("SELECT * FROM calls WHERE id=? AND status='active'", (call_id,)).fetchone()
         if not call:
@@ -587,8 +613,8 @@ async def reply_in_call(call_id: str, body: CallReply) -> dict:
         turns = json.loads(call["turns_json"] or "[]")[-20:]
         selected = retrieve_memories(connection, body.text, 7)
         profiles = profile_prompt(connection, now)
-    memories = [*profiles, *[f"[{row['layer']}] {row['summary'] or row['content']}" for row, _ in selected]]
-    scene = detect_scene(body.text)
+        feedback = interaction_feedback(connection, scene.name)
+    memories = [*profiles, *[f"[{row['layer']}] {row['summary'] or row['content']}" for row, _ in selected], *feedback]
     system = build_system_prompt(scene, memories) + "\n你们正在实时语音通话。说得自然、短一些，像真的电话口语；不要写动作括号、旁白、标签或舞台说明。"
     payload = {
         "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
@@ -683,8 +709,10 @@ async def chat(body: ChatRequest) -> dict:
     with db() as connection:
         connection.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", (user["id"], user["speaker"], user["kind"], user["text"], user["createdAt"], None))
         recent = list(connection.execute("SELECT speaker,text FROM messages ORDER BY created_at DESC LIMIT 24"))[::-1]
+        scene = detect_scene(user["text"])
         selected = retrieve_memories(connection, user["text"], 8)
         profiles = profile_prompt(connection, now)
+        feedback = interaction_feedback(connection, scene.name)
         legacy = [] if selected else connection.execute("SELECT category,text FROM memories WHERE active=1 ORDER BY created_at DESC LIMIT 8").fetchall()
 
     prompt_memories: list[str] = []
@@ -692,8 +720,7 @@ async def chat(body: ChatRequest) -> dict:
         prompt_memories = [f"[{row['layer']}] {row['summary'] or row['content']}" for row, _ in selected]
     elif legacy:
         prompt_memories = [f"[旧版/{item['category']}] {item['text']}" for item in legacy]
-    prompt_memories = [*profiles, *prompt_memories]
-    scene = detect_scene(user["text"])
+    prompt_memories = [*profiles, *prompt_memories, *feedback]
     system = build_system_prompt(scene, prompt_memories)
     payload = {
         "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),

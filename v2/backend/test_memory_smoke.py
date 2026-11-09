@@ -33,6 +33,18 @@ updated = main.update_memory(created["id"], main.MemoryUpdate(
 assert updated["summary"] == "难过时先陪伴"
 reinforced = main.reinforce_memory(created["id"])
 assert abs(reinforced["confidence"] - 0.95) < 0.0001
+with main.db() as connection:
+    connection.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", ("feedback-user", "user", "text", "我只想让你陪陪我", main.now(), None))
+    connection.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", ("feedback-assistant", "assistant", "text", "那你先自己待着。", main.now(), None))
+    connection.execute(
+        """INSERT INTO chat_runs(id,user_message_id,assistant_message_id,status,scene,memory_ids_json,error,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,?,?,?)""",
+        ("feedback-run", "feedback-user", "feedback-assistant", "complete", "comfort", "[]", None, main.now(), main.now()),
+    )
+feedback = main.create_feedback(main.FeedbackCreate(message_id="feedback-assistant", scene="chat", verdict="dislike", reason="太冷淡了"))
+assert feedback["scene"] == "comfort"
+with main.db() as connection:
+    assert "太冷淡了" in main.interaction_feedback(connection, "comfort")[0]
 archived = main.update_memory_status(created["id"], main.MemoryStatusUpdate(status="archived"))
 assert archived["status"] == "archived"
 deleted = main.delete_memory(created["id"])
