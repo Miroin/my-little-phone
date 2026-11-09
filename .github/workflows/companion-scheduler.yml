@@ -13,7 +13,7 @@ jobs:
   companion:
     if: ${{ vars.MLP_BACKEND_URL != '' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 8
     steps:
       - name: 让沈砚判断是否主动联系
         env:
@@ -25,6 +25,9 @@ jobs:
           curl --fail-with-body --silent --show-error --retry 2 --max-time 90 \
             -X POST -H "X-Scheduler-Token: ${SCHEDULER_TOKEN}" \
             "${base}/api/companion/tick"
+          curl --fail-with-body --silent --show-error --retry 1 --max-time 90 \
+            -X POST -H "X-Scheduler-Token: ${SCHEDULER_TOKEN}" \
+            "${base}/api/memories/extract-recent"
           curl --fail-with-body --silent --show-error --retry 1 --max-time 150 \
             -X POST -H "X-Scheduler-Token: ${SCHEDULER_TOKEN}" \
             "${base}/api/voice/pending"

@@ -744,6 +744,93 @@ async def extract_call_memories(call_id: str) -> dict:
         raise HTTPException(status_code=502, detail="通话记忆提取暂时失败，可以稍后重试") from exc
 
 
+@app.post("/api/memories/extract-recent")
+async def extract_recent_chat_memories() -> dict:
+    """Turn settled v2 chat into reviewable memory candidates without blocking replies."""
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="服务端尚未配置 DeepSeek API Key")
+    job_id = "recent-chat-memory"
+    cutoff = (datetime.now(timezone.utc).timestamp() - 600)
+    cutoff_iso = datetime.fromtimestamp(cutoff, timezone.utc).isoformat()
+    with db() as connection:
+        existing = connection.execute("SELECT * FROM memory_jobs WHERE id=?", (job_id,)).fetchone()
+        if existing and existing["status"] == "running":
+            try:
+                age = datetime.now(timezone.utc) - datetime.fromisoformat(existing["updated_at"])
+                if age.total_seconds() < 180:
+                    return {"created": 0, "items": [], "processed": 0, "waiting": 0, "reason": "最近聊天正在整理"}
+            except (TypeError, ValueError):
+                pass
+        cursor_time = ""
+        cursor_id = ""
+        if existing and existing["cursor"]:
+            try:
+                cursor_data = json.loads(existing["cursor"])
+                cursor_time, cursor_id = str(cursor_data.get("createdAt") or ""), str(cursor_data.get("id") or "")
+            except (json.JSONDecodeError, AttributeError):
+                cursor_time = str(existing["cursor"])
+        rows = connection.execute(
+            """SELECT id,speaker,text,created_at FROM messages
+            WHERE call_id IS NULL AND kind IN ('text','voice') AND created_at<=?
+            AND (created_at>? OR (created_at=? AND id>?))
+            ORDER BY created_at,id LIMIT 40""",
+            (cutoff_iso, cursor_time, cursor_time, cursor_id),
+        ).fetchall()
+        if len(rows) < 4:
+            return {"created": 0, "items": [], "processed": 0, "waiting": len(rows), "reason": "等待形成完整对话片段"}
+        timestamp = now()
+        payload = json.dumps({"first": rows[0]["id"], "last": rows[-1]["id"], "messages": len(rows)}, ensure_ascii=False)
+        connection.execute(
+            """INSERT INTO memory_jobs VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
+            status='running',attempts=memory_jobs.attempts+1,last_error=NULL,payload_json=excluded.payload_json,updated_at=excluded.updated_at""",
+            (job_id, "recent_chat_extract", "running", existing["cursor"] if existing else None, 1, None, payload, timestamp, timestamp),
+        )
+    transcript = "\n".join(f"{'陈钰' if row['speaker']=='user' else '沈砚'}：{row['text']}" for row in rows)[:50000]
+    prompt = f"""从这段已经结束一会儿的真实聊天中，提取少量值得长期保留的记忆候选。普通寒暄不要提取，不要把台词改写成人格事实，不要编造。
+分类只能是 relationship、user、event、feeling、plan、sample。
+返回严格 JSON：{{"candidates":[{{"layer":"event","summary":"简洁事实","evidence":"支持该事实的聊天原文","confidence":0.8}}]}}。
+没有值得保留的内容就返回 {{"candidates":[]}}。
+聊天原文：
+{transcript}"""
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(
+                os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/chat/completions"),
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={"model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"), "messages": [{"role": "user", "content": prompt}], "temperature": 0.15, "response_format": {"type": "json_object"}},
+            )
+        response.raise_for_status()
+        candidates = parse_candidate_payload(response.json()["choices"][0]["message"]["content"])
+        created_ids: list[str] = []
+        source_id = f"live-chat:{rows[0]['id']}:{rows[-1]['id']}"
+        with db() as connection:
+            for candidate in candidates:
+                memory_id, timestamp = new_id(), now()
+                cursor = connection.execute(
+                    """INSERT OR IGNORE INTO memory_items(id,layer,content,summary,status,importance,confidence,occurred_at,
+                    created_at,updated_at,source_type,source_id,source_hash,tags_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (memory_id, candidate["layer"], candidate["summary"], candidate["summary"], "candidate", 6.5,
+                     candidate["confidence"], rows[-1]["created_at"], timestamp, timestamp, "live_chat", source_id,
+                     content_hash(candidate["summary"]), "[]"),
+                )
+                if cursor.rowcount:
+                    evidence = candidate["evidence"][:50000]
+                    connection.execute(
+                        "INSERT INTO memory_evidence VALUES(?,?,?,?,?,?,?,?)",
+                        (new_id(), memory_id, source_id, rows[0]["id"], rows[-1]["id"], evidence, content_hash(evidence), timestamp),
+                    )
+                    created_ids.append(memory_id)
+            next_cursor = json.dumps({"createdAt": rows[-1]["created_at"], "id": rows[-1]["id"]})
+            connection.execute("UPDATE memory_jobs SET status='done',cursor=?,updated_at=? WHERE id=?", (next_cursor, now(), job_id))
+            items = [connection.execute("SELECT * FROM memory_items WHERE id=?", (memory_id,)).fetchone() for memory_id in created_ids]
+        return {"created": len(items), "items": [memory_dict(row) for row in items], "processed": len(rows), "waiting": 0}
+    except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        with db() as connection:
+            connection.execute("UPDATE memory_jobs SET status='failed',last_error=?,updated_at=? WHERE id=?", (str(exc)[:500], now(), job_id))
+        raise HTTPException(status_code=502, detail="最近聊天记忆整理暂时失败，可以稍后重试") from exc
+
+
 @app.post("/api/chat/stream")
 async def chat_stream(body: ChatRequest, request: Request) -> StreamingResponse:
     api_key = os.getenv("DEEPSEEK_API_KEY")

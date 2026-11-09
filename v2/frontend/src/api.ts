@@ -243,6 +243,11 @@ export async function extractCallMemories(id:string):Promise<{created:number;ite
   if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'通话记忆整理失败');
   return response.json();
 }
+export async function extractRecentChatMemories():Promise<{created:number;items:Memory[];processed:number;waiting:number;reason?:string}>{
+  const response=await apiFetch(`${API_BASE}/api/memories/extract-recent`,{method:'POST'});
+  if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'最近聊天记忆整理失败');
+  return response.json();
+}
 
 export interface CompanionSettings {enabled:boolean;allow_calls:boolean;dnd_enabled:boolean;dnd_start:string;dnd_end:string;timezone:string}
 export async function loadCompanionSettings():Promise<CompanionSettings>{
