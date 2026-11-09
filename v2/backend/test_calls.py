@@ -44,6 +44,23 @@ with main.db() as connection:
 ended_ringing = main.end_call(ringing_id, main.CallEnd(status="answered"))
 assert 64 <= ended_ringing["durationSeconds"] <= 66
 
+# 拒接来电会结束对应主动事件，不能永久挡住之后的主动联系。
+declined_id = main.new_id()
+with main.db() as connection:
+    connection.execute(
+        "INSERT INTO calls(id,direction,status,started_at,ended_at,duration_seconds,turns_json,answered_at) VALUES(?,?,?,?,?,?,?,?)",
+        (declined_id, "incoming", "ringing", main.now(), None, 0, "[]", None),
+    )
+    connection.execute(
+        "INSERT INTO proactive_events VALUES(?,?,?,?,?,?,?,?,?)",
+        (main.new_id(), "call", "sent", "想她", "想听听你的声音。", None, declined_id, main.now(), None),
+    )
+declined = main.end_call(declined_id, main.CallEnd(status="declined"))
+assert declined["status"] == "declined"
+with main.db() as connection:
+    event_status = connection.execute("SELECT status FROM proactive_events WHERE call_id=?", (declined_id,)).fetchone()[0]
+assert event_status == "declined"
+
 # 挂断后只生成待确认候选；重复请求复用同一结果，不重复写入。
 class FakeResponse:
     def raise_for_status(self):

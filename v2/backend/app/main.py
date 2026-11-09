@@ -628,6 +628,11 @@ def end_call(call_id: str, body: CallEnd) -> dict:
         label = "通话" if body.status == "answered" else ("未接来电" if body.status == "missed" else "已拒绝来电")
         event_text = f"{label} · {duration // 60:02d}:{duration % 60:02d}" if duration else label
         connection.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", (new_id(), "assistant", "call_event", event_text, ended.isoformat(), call_id))
+        if body.status in {"missed", "declined"}:
+            connection.execute(
+                "UPDATE proactive_events SET status=?,answered_at=? WHERE call_id=? AND status='sent'",
+                (body.status, ended.isoformat(), call_id),
+            )
         updated = connection.execute("SELECT * FROM calls WHERE id=?", (call_id,)).fetchone()
     return call_dict(updated)
 

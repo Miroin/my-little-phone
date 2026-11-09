@@ -4,7 +4,7 @@ import json
 import os
 import re
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 from zoneinfo import ZoneInfo
 
@@ -102,6 +102,26 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
             clock = local.strftime("%H:%M")
             if settings["dnd_enabled"] and _inside_dnd(clock, settings["dnd_start"], settings["dnd_end"]):
                 return {"action": "wait", "reason": "勿扰时段"}
+            cutoff = (datetime.now(timezone.utc) - timedelta(minutes=3)).isoformat()
+            expired = connection.execute(
+                "SELECT id FROM calls WHERE direction='incoming' AND status='ringing' AND started_at<?", (cutoff,),
+            ).fetchall()
+            if expired:
+                timestamp = now()
+                for call in expired:
+                    connection.execute(
+                        "UPDATE calls SET status='missed',ended_at=?,duration_seconds=0 WHERE id=? AND status='ringing'",
+                        (timestamp, call["id"]),
+                    )
+                    connection.execute(
+                        "UPDATE proactive_events SET status='missed',answered_at=? WHERE call_id=? AND status='sent'",
+                        (timestamp, call["id"]),
+                    )
+                    connection.execute(
+                        "INSERT INTO messages VALUES(?,?,?,?,?,?)",
+                        (new_id(), "assistant", "call_event", "未接来电", timestamp, call["id"]),
+                    )
+                return {"action": "wait", "reason": "上一通来电没有接听，这一轮不继续打扰", "expiredCalls": len(expired)}
             pending = connection.execute("SELECT * FROM proactive_events WHERE status='sent' AND answered_at IS NULL ORDER BY created_at DESC LIMIT 1").fetchone()
             if pending:
                 return {"action": "wait", "reason": "上一条主动联系还没有回复，不连续打扰"}
