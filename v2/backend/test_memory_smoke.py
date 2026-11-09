@@ -53,4 +53,7 @@ with main.db() as connection:
     assert connection.execute("SELECT 1 FROM memory_items WHERE id=?", (created["id"],)).fetchone() is None
     assert connection.execute("SELECT 1 FROM memory_evidence WHERE memory_id=?", (created["id"],)).fetchone() is None
 assert main.health()["memorySchema"] == 2
+readiness = main.service_readiness()
+assert readiness["checks"]["database"] is True
+assert "deepseek" in readiness["missing"]
 print("memory smoke test passed")

@@ -24,7 +24,7 @@ from .memory_extract import build_router as build_memory_extract_router, install
 from .persona import build_system_prompt, detect_scene
 from .voice import build_router as build_voice_router, install_voice_schema
 from .proactive import build_router as build_proactive_router, install_proactive_schema
-from .notifications import build_router as build_notification_router, install_notification_schema
+from .notifications import build_router as build_notification_router, install_notification_schema, vapid_config
 from .profiles import build_router as build_profile_router, install_profile_schema, profile_prompt
 from .life import build_router as build_life_router, install_life_schema
 
@@ -380,6 +380,30 @@ def health() -> dict:
 @app.get("/api/session")
 def private_session() -> dict:
     return {"ok": True, "authenticated": True}
+
+
+@app.get("/api/readiness")
+def service_readiness() -> dict:
+    checks = {
+        "database": False,
+        "deepseek": bool(os.getenv("DEEPSEEK_API_KEY", "").strip()),
+        "minimax": bool(os.getenv("MINIMAX_API_KEY", "").strip() and os.getenv("MINIMAX_VOICE_ID", "").strip()),
+        "scheduler": bool(os.getenv("SCHEDULER_TOKEN", "").strip()),
+        "accessProtection": bool(os.getenv("MLP_ACCESS_TOKEN", "").strip()),
+        "push": False,
+    }
+    try:
+        with db() as connection:
+            checks["database"] = connection.execute("PRAGMA quick_check").fetchone()[0] == "ok"
+    except sqlite3.Error:
+        checks["database"] = False
+    try:
+        vapid_config()
+        checks["push"] = True
+    except (OSError, ValueError, KeyError, RuntimeError, ImportError):
+        checks["push"] = False
+    missing = [name for name, configured in checks.items() if not configured]
+    return {"ready": not missing, "checks": checks, "missing": missing}
 
 
 @app.get("/api/messages")
