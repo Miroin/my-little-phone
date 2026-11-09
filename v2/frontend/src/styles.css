@@ -22,3 +22,5 @@
 .life-list article>button,.gallery-grid figcaption button{float:right;border:0;background:transparent;color:#917b9d;font-size:11px}
 
 .load-older{align-self:center;border:1px solid #dfd0e4;border-radius:999px;padding:7px 14px;background:#fff9;color:#80649b}
+
+.notification-health{display:grid;gap:6px;margin-top:14px;padding:13px;border:1px solid #e5d8e9;border-radius:16px;background:#fff9;text-align:left}.notification-health span,.notification-health small{display:block}.notification-health button{justify-self:start;border:0;border-radius:999px;padding:7px 12px;background:#eadcf5;color:#6f5680}.notification-error{color:#9b5968;overflow-wrap:anywhere}

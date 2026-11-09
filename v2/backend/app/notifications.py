@@ -109,6 +109,28 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
             connection.execute("UPDATE push_subscriptions SET active=0,updated_at=? WHERE endpoint=?", (now(), body.endpoint))
         return {"subscribed": False}
 
+    @router.get("/status")
+    def status() -> dict:
+        with db_factory() as connection:
+            install_notification_schema(connection)
+            subscriptions = connection.execute("SELECT COUNT(*) FROM push_subscriptions WHERE active=1").fetchone()[0]
+            counts = {row["status"]: row["total"] for row in connection.execute(
+                "SELECT status,COUNT(*) total FROM notification_outbox GROUP BY status"
+            ).fetchall()}
+            latest = connection.execute(
+                "SELECT status,attempts,last_error,created_at,updated_at FROM notification_outbox ORDER BY created_at DESC LIMIT 1"
+            ).fetchone()
+        return {"activeSubscriptions": subscriptions, "counts": counts, "latest": dict(latest) if latest else None}
+
+    @router.post("/retry-failed")
+    def retry_failed() -> dict:
+        with db_factory() as connection:
+            install_notification_schema(connection)
+            cursor = connection.execute(
+                "UPDATE notification_outbox SET status='pending',last_error=NULL,updated_at=? WHERE status='failed'", (now(),),
+            )
+        return {"queued": cursor.rowcount}
+
     @router.post("/dispatch")
     def dispatch(x_scheduler_token: str | None = Header(default=None)) -> dict:
         expected = os.getenv("SCHEDULER_TOKEN", "").strip()

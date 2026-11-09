@@ -253,6 +253,9 @@ export async function saveCompanionSettings(settings:CompanionSettings):Promise<
 }
 export interface ProactiveEvent{id:string;event_type:'message'|'call';status:string;reason:string;text:string;created_at:string;answered_at?:string}
 export async function loadProactiveEvents():Promise<ProactiveEvent[]>{const response=await apiFetch(`${API_BASE}/api/companion/events`);if(!response.ok)throw new Error('读取主动陪伴动态失败');return response.json();}
+export interface NotificationStatus{activeSubscriptions:number;counts:Record<string,number>;latest:{status:string;attempts:number;last_error?:string;created_at:string;updated_at:string}|null}
+export async function loadNotificationStatus():Promise<NotificationStatus>{const response=await apiFetch(`${API_BASE}/api/notifications/status`);if(!response.ok)throw new Error('读取通知状态失败');return response.json();}
+export async function retryFailedNotifications():Promise<{queued:number}>{const response=await apiFetch(`${API_BASE}/api/notifications/retry-failed`,{method:'POST'});if(!response.ok)throw new Error('通知重试失败');return response.json();}
 
 function decodeApplicationKey(value:string):ArrayBuffer{
   const padded=(value+'='.repeat((4-value.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/');
