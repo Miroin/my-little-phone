@@ -18,7 +18,7 @@ BACKUP_TABLES = (
     "imported_messages", "memory_candidates", "memory_candidate_conflicts",
     "extraction_runs", "extraction_jobs", "extraction_chunks", "chat_runs", "audio_assets", "character_profiles",
     "companion_settings", "proactive_events",
-    "life_notes", "media_assets",
+    "life_notes", "media_assets", "worldbook_entries",
 )
 BACKUP_MAX_BYTES = max(1, int(os.getenv("MLP_BACKUP_MAX_MB", "512"))) * 1024 * 1024
 

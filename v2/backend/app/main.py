@@ -27,6 +27,7 @@ from .proactive import build_router as build_proactive_router, install_proactive
 from .notifications import build_router as build_notification_router, install_notification_schema, vapid_config
 from .profiles import build_router as build_profile_router, install_profile_schema, profile_prompt
 from .life import build_router as build_life_router, install_life_schema
+from .worldbook import build_router as build_worldbook_router, install_worldbook_schema, worldbook_prompt
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("MLP_DATABASE_PATH", ROOT / "data" / "little-phone.db"))
@@ -138,6 +139,7 @@ def db() -> sqlite3.Connection:
     install_notification_schema(connection)
     install_profile_schema(connection, now, seed=False)
     install_life_schema(connection)
+    install_worldbook_schema(connection)
     return connection
 
 
@@ -149,6 +151,7 @@ app.include_router(build_proactive_router(db, now, new_id))
 app.include_router(build_notification_router(db, now, new_id))
 app.include_router(build_profile_router(db, now))
 app.include_router(build_life_router(db, now, new_id))
+app.include_router(build_worldbook_router(db, now, new_id))
 
 
 class ChatRequest(BaseModel):
@@ -338,12 +341,13 @@ def prepare_chat(body: ChatRequest) -> tuple[dict, list[sqlite3.Row], list[tuple
         scene = detect_scene(user["text"])
         selected = retrieve_memories(connection, user["text"], 8)
         profiles = profile_prompt(connection, now)
+        worldbook = worldbook_prompt(connection, user["text"])
         feedback = interaction_feedback(connection, scene.name)
         legacy = [] if selected else connection.execute("SELECT category,text FROM memories WHERE active=1 ORDER BY created_at DESC LIMIT 8").fetchall()
     prompt_memories = [f"[{row['layer']}] {row['summary'] or row['content']}" for row, _ in selected]
     if not prompt_memories:
         prompt_memories = [f"[旧版/{item['category']}] {item['text']}" for item in legacy]
-    prompt_memories = [*profiles, *prompt_memories, *feedback]
+    prompt_memories = [*profiles, *worldbook, *prompt_memories, *feedback]
     payload = {
         "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
         "messages": [{"role": "system", "content": build_system_prompt(scene, prompt_memories)}, *[
@@ -651,8 +655,9 @@ async def reply_in_call(call_id: str, body: CallReply) -> dict:
         turns = json.loads(call["turns_json"] or "[]")[-20:]
         selected = retrieve_memories(connection, body.text, 7)
         profiles = profile_prompt(connection, now)
+        worldbook = worldbook_prompt(connection, body.text)
         feedback = interaction_feedback(connection, scene.name)
-    memories = [*profiles, *[f"[{row['layer']}] {row['summary'] or row['content']}" for row, _ in selected], *feedback]
+    memories = [*profiles, *worldbook, *[f"[{row['layer']}] {row['summary'] or row['content']}" for row, _ in selected], *feedback]
     system = build_system_prompt(scene, memories) + "\n你们正在实时语音通话。说得自然、短一些，像真的电话口语；不要写动作括号、旁白、标签或舞台说明。"
     payload = {
         "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),

@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from .notifications import enqueue_notification
 from .persona import CORE_PERSONA, INTERACTION, RELATIONSHIP
 from .profiles import profile_prompt
+from .worldbook import worldbook_prompt
 
 
 class CompanionSettings(BaseModel):
@@ -128,6 +129,7 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
             recent = connection.execute("SELECT speaker,text,created_at FROM messages ORDER BY created_at DESC LIMIT 16").fetchall()[::-1]
             plans = connection.execute("SELECT layer,summary,content FROM memory_items WHERE status='active' AND layer IN ('plan','event','relationship','user','sample') ORDER BY importance DESC,updated_at DESC LIMIT 12").fetchall()
             profiles = profile_prompt(connection, now)
+            worldbook = worldbook_prompt(connection, "\n".join(row["text"] for row in recent))
             feedback = connection.execute(
                 """SELECT f.verdict,f.reason,m.text FROM memory_feedback f JOIN messages m ON m.id=f.message_id
                 ORDER BY f.created_at DESC LIMIT 5"""
@@ -138,6 +140,7 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
         context = "\n".join(f"{'陈钰' if row['speaker']=='user' else '沈砚'}：{row['text']}" for row in recent)
         memory = "\n".join(f"- [{row['layer']}] {row['summary'] or row['content']}" for row in plans)
         profile = "\n".join(f"- {item}" for item in profiles)
+        world = "\n".join(f"- {item}" for item in worldbook)
         feedback_text = "\n".join(
             f"- {'曾被认可' if row['verdict']=='like' else '需要避免'}：{row['text'][:200]}"
             + (f"；原因：{row['reason'][:120]}" if row['reason'] else "") for row in feedback
@@ -153,6 +156,8 @@ voice 表示他此刻更想直接发一条语音；只在语气、亲近感或�
 允许主动来电：{bool(settings['allow_calls'])}。如果不允许，不能选择 call。
 人物档案：
 {profile or '暂无补充档案'}
+当前相关世界书：
+{world or '暂无相关条目'}
 相关约定：
 {memory or '暂无'}
 近期互动反馈（只学习判断和节奏，不照抄句子，也不把单次负评当全局命令）：
