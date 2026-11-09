@@ -18,6 +18,7 @@ client = TestClient(main.app)
 main.create_memory(main.MemoryCreate(layer="relationship", content="难过时先陪伴", status="active", importance=9))
 client.put("/api/profiles/shenyan", json={"display_name": "沈砚", "categories": {"relationship": "陈钰的恋人"}})
 client.post("/api/life/notes", json={"kind": "home", "title": "周末", "content": "一起吃火锅"})
+client.put("/api/life/home-state", json={"version": 1, "scene": "ground", "actors": {"chenyu": {"x": 8, "y": 7, "facing": 0}}, "pet_names": {"dog": "团子", "cat": "阿比"}, "furniture": {}})
 photo = client.post("/api/life/media", files={"file": ("photo.png", b"fake-png-data", "image/png")}, data={"title": "合照"})
 assert photo.status_code == 201
 
@@ -27,6 +28,7 @@ envelope = exported.json()
 assert envelope["format"] == "my-little-phone-v2-backup"
 assert len(envelope["checksum"]) == 64
 assert len(envelope["payload"]["tables"]["memory_items"]) == 1
+assert envelope["payload"]["tables"]["home_game_state"][0]["id"] == "home"
 
 preview = client.post("/api/backups/restore-preview", files={"file": ("backup.json", exported.content, "application/json")})
 assert preview.status_code == 201, preview.text
@@ -49,6 +51,7 @@ assert fresh_confirmed.status_code == 200, fresh_confirmed.text
 assert fresh_confirmed.json()["inserted"]["character_profiles"] == 2
 assert fresh_confirmed.json()["inserted"]["life_notes"] == 1
 assert fresh_confirmed.json()["inserted"]["media_assets"] == 1
+assert fresh_confirmed.json()["inserted"]["home_game_state"] == 1
 assert client.get("/api/profiles").json()[0]["categories"]["relationship"] == "陈钰的恋人"
 assert len(client.get("/api/life/media").json()) == 1
 

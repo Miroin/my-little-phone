@@ -19,4 +19,9 @@ assert schedule.status_code == 201
 assert client.get("/api/life/notes?kind=schedule").json()[0]["title"] == "周六约会"
 assert client.delete(f"/api/life/notes/{schedule.json()['id']}").status_code == 200
 assert client.get("/api/life/notes?kind=schedule").json() == []
+home_state = {"version": 1, "scene": "yard", "actors": {"chenyu": {"x": 4, "y": 7, "facing": 1}}, "pet_names": {"dog": "团子", "cat": "阿比"}, "furniture": {"lamp": True}}
+saved = client.put("/api/life/home-state", json=home_state)
+assert saved.status_code == 200 and saved.json()["state"]["pet_names"]["dog"] == "团子"
+loaded = client.get("/api/life/home-state")
+assert loaded.status_code == 200 and loaded.json()["state"]["scene"] == "yard"
 print("shared life test passed")

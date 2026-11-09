@@ -25,6 +25,12 @@ services:
         generateValue: true
       - key: MLP_BACKUP_MAX_MB
         value: 512
+      - key: MLP_DATABASE_PATH
+        value: /data/little-phone.db
+      - key: MLP_AUDIO_PATH
+        value: /data/audio
+      - key: MLP_MEDIA_PATH
+        value: /data/media
       - key: MLP_VAPID_PATH
         value: /data/vapid.json
       - key: VAPID_SUBJECT

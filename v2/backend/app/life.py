@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import sqlite3
 from pathlib import Path
-from typing import Callable, Literal
+from typing import Any, Callable, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -18,6 +18,14 @@ class LifeNoteCreate(BaseModel):
     content: str = Field(default="", max_length=8000)
 
 
+class HomeGameState(BaseModel):
+    version: int = 1
+    scene: Literal["ground", "upstairs", "yard"] = "ground"
+    actors: dict[str, Any] = Field(default_factory=dict)
+    pet_names: dict[str, str] = Field(default_factory=lambda: {"dog": "伯恩山", "cat": "阿比"})
+    furniture: dict[str, Any] = Field(default_factory=dict)
+
+
 def install_life_schema(connection: sqlite3.Connection) -> None:
     connection.executescript(
         """CREATE TABLE IF NOT EXISTS life_notes(
@@ -28,6 +36,8 @@ def install_life_schema(connection: sqlite3.Connection) -> None:
         size_bytes INTEGER NOT NULL,created_at TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS idx_life_kind ON life_notes(kind,created_at);
         CREATE INDEX IF NOT EXISTS idx_media_kind ON media_assets(kind,created_at);
+        CREATE TABLE IF NOT EXISTS home_game_state(
+        id TEXT PRIMARY KEY CHECK(id='home'),state_json TEXT NOT NULL,updated_at TEXT NOT NULL);
         """
     )
 
@@ -35,6 +45,25 @@ def install_life_schema(connection: sqlite3.Connection) -> None:
 def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[], str], new_id: Callable[[], str]) -> APIRouter:
     router = APIRouter(prefix="/api/life", tags=["shared-life"])
     media_dir = Path(os.getenv("MLP_MEDIA_PATH", Path(__file__).resolve().parents[1] / "data" / "media"))
+
+    @router.get("/home-state")
+    def get_home_state() -> dict:
+        import json
+        with db_factory() as connection:
+            install_life_schema(connection)
+            row = connection.execute("SELECT state_json,updated_at FROM home_game_state WHERE id='home'").fetchone()
+        return {"state": json.loads(row["state_json"]), "updated_at": row["updated_at"]} if row else {"state": None, "updated_at": None}
+
+    @router.put("/home-state")
+    def put_home_state(body: HomeGameState) -> dict:
+        import json
+        timestamp = now()
+        state = body.model_dump()
+        state["pet_names"] = {key: str(value).strip()[:24] or ("伯恩山" if key == "dog" else "阿比") for key, value in state["pet_names"].items()}
+        with db_factory() as connection:
+            install_life_schema(connection)
+            connection.execute("INSERT INTO home_game_state VALUES('home',?,?) ON CONFLICT(id) DO UPDATE SET state_json=excluded.state_json,updated_at=excluded.updated_at", (json.dumps(state, ensure_ascii=False), timestamp))
+        return {"state": state, "updated_at": timestamp}
 
     @router.get("/notes")
     def notes(kind: LifeKind | None = None) -> list[dict]:

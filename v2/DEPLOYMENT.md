@@ -27,7 +27,11 @@ Web Push 的 VAPID 密钥会在首次启动时自动生成到 `/data/vapid.json`
 工作流每五分钟顺序调用：
 
 1. `POST https://你的后端/api/companion/tick`
-2. `POST https://你的后端/api/notifications/dispatch`
+2. `POST https://你的后端/api/memories/extract-recent`
+3. `POST https://你的后端/api/voice/pending`
+4. `POST https://你的后端/api/notifications/dispatch`
+
+其中第 2 步整理最近聊天记忆，第 3 步把主动消息中的语音标记生成成真实语音条，最后一步才发送系统通知。
 
 两个请求都带受保护的调度令牌。决策层没有固定每日次数，但若上一条主动消息或来电尚未得到回应，会自动等待；勿扰时段也不会触发。GitHub 定时任务可能有数分钟延迟，因此不是精确闹钟。
 
