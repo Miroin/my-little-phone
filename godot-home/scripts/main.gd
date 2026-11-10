@@ -2,6 +2,7 @@ extends Node2D
 
 const Player = preload("res://scripts/player.gd")
 const Joystick = preload("res://scripts/virtual_joystick.gd")
+const Actor = preload("res://scripts/home_actor.gd")
 const MAPS := {
 	"ground": {"texture": "res://assets/maps/ground.png", "spawn": Vector2(770, 650), "solids": [Rect2(340,345,145,315),Rect2(1015,300,390,230),Rect2(1100,585,315,270)], "portal": Rect2(360,470,120,190), "to": "upstairs", "to_spawn": Vector2(395,560), "label": "上楼"},
 	"upstairs": {"texture": "res://assets/maps/upstairs.png", "spawn": Vector2(395,560), "solids": [Rect2(530,500,470,285),Rect2(330,335,145,275),Rect2(1030,380,330,225)], "portal": Rect2(340,420,130,190), "to": "ground", "to_spawn": Vector2(420,610), "label": "下楼"},
@@ -14,6 +15,7 @@ var player: HomePlayer
 var joystick
 var action_button: Button
 var scene_label: Label
+var actors: Array[HomeActor] = []
 
 func _ready() -> void:
 	map_sprite = Sprite2D.new()
@@ -28,6 +30,7 @@ func _ready() -> void:
 	camera.position_smoothing_speed = 6.0
 	camera.zoom = Vector2(1.12, 1.12)
 	player.add_child(camera)
+	create_family()
 	build_ui()
 	load_scene("ground", MAPS.ground.spawn)
 
@@ -69,6 +72,20 @@ func build_ui() -> void:
 	scene_label.add_theme_font_size_override("font_size", 18)
 	layer.add_child(scene_label)
 
+func create_family() -> void:
+	var shenyan: HomeActor = Actor.new()
+	add_child(shenyan)
+	shenyan.setup("沈砚", "ground", Vector2(620, 520), "res://assets/sprites/shenyan.png", 0.22, 82.0, 175.0)
+	actors.append(shenyan)
+	var cat: HomeActor = Actor.new()
+	add_child(cat)
+	cat.setup("阿比", "ground", Vector2(900, 610), "res://assets/sprites/cat.png", 0.18, 105.0, 210.0)
+	actors.append(cat)
+	var dog: HomeActor = Actor.new()
+	add_child(dog)
+	dog.setup("伯恩山", "yard", Vector2(940, 520), "res://assets/sprites/dog.png", 0.20, 90.0, 250.0)
+	actors.append(dog)
+
 func load_scene(id: String, spawn: Vector2) -> void:
 	scene_id = id
 	var data: Dictionary = MAPS[id]
@@ -79,6 +96,9 @@ func load_scene(id: String, spawn: Vector2) -> void:
 	for rect in data.solids:
 		add_solid(rect)
 	player.position = spawn
+	for actor in actors:
+		actor.visible = actor.home_scene == id
+		actor.set_physics_process(actor.visible)
 	scene_label.text = {"ground":"一楼", "upstairs":"二楼", "yard":"庭院"}[id]
 
 func add_boundary(rect: Rect2) -> void:
