@@ -1,0 +1,38 @@
+name: 小手叽主动陪伴调度
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: little-phone-companion-scheduler
+  cancel-in-progress: false
+
+jobs:
+  companion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: 让沈砚判断是否主动联系
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_BASE_URL }}
+          SCHEDULER_TOKEN: ${{ secrets.SCHEDULER_TOKEN }}
+        run: |
+          set -euo pipefail
+          base="${BACKEND_URL%/}"
+          curl --fail-with-body --silent --show-error --retry 2 --max-time 90 \
+            -X POST -H "X-Scheduler-Token: ${SCHEDULER_TOKEN}" \
+            "${base}/api/companion/tick"
+          curl --fail-with-body --silent --show-error --retry 1 --max-time 90 \
+            -X POST -H "X-Scheduler-Token: ${SCHEDULER_TOKEN}" \
+            "${base}/api/memories/extract-recent"
+          curl --fail-with-body --silent --show-error --retry 1 --max-time 150 \
+            -X POST -H "X-Scheduler-Token: ${SCHEDULER_TOKEN}" \
+            "${base}/api/voice/pending"
+          curl --fail-with-body --silent --show-error --retry 2 --max-time 90 \
+            -X POST -H "X-Scheduler-Token: ${SCHEDULER_TOKEN}" \
+            "${base}/api/notifications/dispatch"
+          curl --fail-with-body --silent --show-error --retry 2 --max-time 180 \
+            -X POST -H "X-Scheduler-Token: ${SCHEDULER_TOKEN}" \
+            "${base}/api/cloud-backup/sync"
