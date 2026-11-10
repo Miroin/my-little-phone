@@ -11,14 +11,13 @@ concurrency:
 
 jobs:
   companion:
-    if: ${{ vars.MLP_BACKEND_URL != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
       - name: 让沈砚判断是否主动联系
         env:
-          BACKEND_URL: ${{ vars.MLP_BACKEND_URL }}
-          SCHEDULER_TOKEN: ${{ secrets.MLP_SCHEDULER_TOKEN }}
+          BACKEND_URL: ${{ secrets.BACKEND_BASE_URL }}
+          SCHEDULER_TOKEN: ${{ secrets.SCHEDULER_TOKEN }}
         run: |
           set -euo pipefail
           base="${BACKEND_URL%/}"
