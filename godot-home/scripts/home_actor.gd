@@ -56,17 +56,22 @@ func build_sprite(texture_path: String, display_scale: float, action_textures: D
 	var frames := SpriteFrames.new()
 	frames.remove_animation("default")
 	var cell := add_sheet(frames, texture_path, "", true, 7.0)
+	available_actions.clear()
 	for action_name_value in action_textures.keys():
 		var action_name := String(action_name_value)
 		add_sheet(frames, String(action_textures[action_name_value]), action_name, false, 5.0)
 		available_actions.append(action_name)
-	sprite = AnimatedSprite2D.new()
+	if sprite == null:
+		sprite = AnimatedSprite2D.new()
+		add_child(sprite)
 	sprite.sprite_frames = frames
 	sprite.animation = "down"
 	sprite.scale = Vector2(display_scale, display_scale)
 	sprite.position = Vector2(0, -cell.y * display_scale * 0.43)
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	add_child(sprite)
+
+func apply_appearance(walk_path: String, action_textures: Dictionary) -> void:
+	build_sprite(walk_path, sprite.scale.x, action_textures)
 
 func _physics_process(delta: float) -> void:
 	if not visible:

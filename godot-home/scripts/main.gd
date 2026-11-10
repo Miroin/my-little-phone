@@ -21,6 +21,8 @@ var pair_sprite: AnimatedSprite2D
 var interaction_mode := ""
 var interaction_index := 0
 var interaction_running := false
+var outfit_mode := "daily"
+var wardrobe_button: Button
 const INTERACTIONS: Array[String] = ["hug", "kiss", "cuddle", "hold_hands"]
 
 func _ready() -> void:
@@ -78,6 +80,12 @@ func build_ui() -> void:
 		label.add_theme_font_size_override("font_size", 18)
 		hud.add_child(label)
 	layer.add_child(hud)
+	wardrobe_button = Button.new()
+	wardrobe_button.text = "衣柜：日常服"
+	wardrobe_button.custom_minimum_size = Vector2(150, 54)
+	wardrobe_button.position = Vector2(16, 52)
+	wardrobe_button.pressed.connect(toggle_outfit)
+	layer.add_child(wardrobe_button)
 	scene_label = Label.new()
 	scene_label.position = Vector2(16, 16)
 	scene_label.add_theme_font_size_override("font_size", 18)
@@ -114,6 +122,10 @@ func build_pair_sprite() -> void:
 	add_pair_sheet(frames, "res://assets/interactions/kiss.png", "kiss")
 	add_pair_sheet(frames, "res://assets/interactions/cuddle_sit.png", "cuddle")
 	add_pair_sheet(frames, "res://assets/interactions/hold_hands.png", "hold_hands")
+	add_pair_sheet(frames, "res://assets/outfits/pajamas/hug.png", "pajamas_hug")
+	add_pair_sheet(frames, "res://assets/outfits/pajamas/kiss.png", "pajamas_kiss")
+	add_pair_sheet(frames, "res://assets/outfits/pajamas/cuddle_sit.png", "pajamas_cuddle")
+	add_pair_sheet(frames, "res://assets/outfits/pajamas/hold_hands.png", "pajamas_hold_hands")
 	pair_sprite = AnimatedSprite2D.new()
 	pair_sprite.sprite_frames = frames
 	pair_sprite.scale = Vector2(0.22, 0.22)
@@ -150,7 +162,7 @@ func play_family_interaction() -> void:
 	var action := INTERACTIONS[interaction_index % INTERACTIONS.size()]
 	interaction_index += 1
 	var direction := player.direction_name(player.facing)
-	var animation := action + "_" + direction
+	var animation := ("pajamas_" if outfit_mode == "pajamas" else "") + action + "_" + direction
 	player.action_locked = true
 	player.velocity = Vector2.ZERO
 	shenyan.set_physics_process(false)
@@ -169,6 +181,35 @@ func play_family_interaction() -> void:
 	player.action_locked = false
 	shenyan.set_physics_process(true)
 	interaction_running = false
+
+func toggle_outfit() -> void:
+	if interaction_running:
+		return
+	outfit_mode = "pajamas" if outfit_mode == "daily" else "daily"
+	if outfit_mode == "pajamas":
+		player.apply_appearance("res://assets/outfits/pajamas/chenyu_walk.png", {
+			"sit": "res://assets/outfits/pajamas/chenyu_sit.png", "rest": "res://assets/outfits/pajamas/chenyu_rest.png",
+			"tool": "res://assets/outfits/pajamas/chenyu_tool.png", "eat": "res://assets/outfits/pajamas/chenyu_eat.png",
+			"sleep": "res://assets/outfits/pajamas/chenyu_sleep.png"
+		})
+		shenyan.apply_appearance("res://assets/outfits/pajamas/shenyan_walk.png", {
+			"sit": "res://assets/outfits/pajamas/shenyan_sit.png", "rest": "res://assets/outfits/pajamas/shenyan_rest.png",
+			"tool": "res://assets/outfits/pajamas/shenyan_tool.png", "eat": "res://assets/outfits/pajamas/shenyan_eat.png",
+			"sleep": "res://assets/outfits/pajamas/shenyan_sleep.png"
+		})
+		wardrobe_button.text = "衣柜：睡衣"
+	else:
+		player.apply_appearance("res://assets/sprites/chenyu.png", {
+			"sit": "res://assets/actions/chenyu_sit.png", "rest": "res://assets/actions/chenyu_rest.png",
+			"tool": "res://assets/actions/chenyu_tool.png", "eat": "res://assets/actions/chenyu_eat.png",
+			"sleep": "res://assets/actions/chenyu_sleep.png"
+		})
+		shenyan.apply_appearance("res://assets/sprites/shenyan.png", {
+			"sit": "res://assets/actions/shenyan_sit.png", "rest": "res://assets/actions/shenyan_rest.png",
+			"tool": "res://assets/actions/shenyan_tool.png", "eat": "res://assets/actions/shenyan_eat.png",
+			"sleep": "res://assets/actions/shenyan_sleep.png"
+		})
+		wardrobe_button.text = "衣柜：日常服"
 
 func load_scene(id: String, spawn: Vector2) -> void:
 	scene_id = id

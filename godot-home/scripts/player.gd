@@ -20,25 +20,25 @@ func _ready() -> void:
 	build_sprite()
 
 func build_sprite() -> void:
-	var frames := SpriteFrames.new()
-	frames.remove_animation("default")
-	var cell := add_sheet(frames, "res://assets/sprites/chenyu.png", "", true, 8.0)
-	var actions := {
-		"sit": "res://assets/actions/chenyu_sit.png",
-		"rest": "res://assets/actions/chenyu_rest.png",
-		"tool": "res://assets/actions/chenyu_tool.png",
-		"eat": "res://assets/actions/chenyu_eat.png",
-		"sleep": "res://assets/actions/chenyu_sleep.png"
-	}
-	for action_name_value in actions.keys():
-		add_sheet(frames, String(actions[action_name_value]), String(action_name_value), false, 5.0)
 	sprite = AnimatedSprite2D.new()
-	sprite.sprite_frames = frames
-	sprite.animation = "down"
 	sprite.scale = Vector2(0.22, 0.22)
-	sprite.position = Vector2(0, -35)
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	add_child(sprite)
+	apply_appearance("res://assets/sprites/chenyu.png", {
+		"sit": "res://assets/actions/chenyu_sit.png", "rest": "res://assets/actions/chenyu_rest.png",
+		"tool": "res://assets/actions/chenyu_tool.png", "eat": "res://assets/actions/chenyu_eat.png",
+		"sleep": "res://assets/actions/chenyu_sleep.png"
+	})
+
+func apply_appearance(walk_path: String, actions: Dictionary) -> void:
+	var frames := SpriteFrames.new()
+	frames.remove_animation("default")
+	var cell := add_sheet(frames, walk_path, "", true, 8.0)
+	for action_name_value in actions.keys():
+		add_sheet(frames, String(actions[action_name_value]), String(action_name_value), false, 5.0)
+	sprite.sprite_frames = frames
+	sprite.animation = "down"
+	sprite.position = Vector2(0, -cell.y * sprite.scale.y * 0.44)
 
 func add_sheet(frames: SpriteFrames, texture_path: String, prefix: String, looped: bool, fps: float) -> Vector2i:
 	var texture: Texture2D = load(texture_path)
