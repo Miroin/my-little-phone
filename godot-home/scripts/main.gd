@@ -52,6 +52,16 @@ var interaction_index := 0
 var interaction_running := false
 var outfit_mode := "daily"
 var wardrobe_button: Button
+var day_label: Label
+var time_label: Label
+var daylight_overlay: ColorRect
+var game_day := 1
+var game_minutes := 480.0
+var schedule_period := -1
+var autosave_elapsed := 0.0
+var loading_save := false
+const GAME_MINUTES_PER_SECOND := 2.0
+const SAVE_PATH := "user://life_save.json"
 const INTERACTIONS: Array[String] = ["hug", "kiss", "cuddle", "hold_hands"]
 
 func _ready() -> void:
@@ -73,13 +83,28 @@ func _ready() -> void:
 	build_pair_sprite()
 	create_family()
 	build_ui()
-	load_scene("ground", MAPS.ground.spawn)
+	var saved := load_game()
+	load_scene(String(saved.get("scene", "ground")), vector_from_save(saved.get("player_position", []), MAPS.ground.spawn))
+	apply_schedule(true)
+	update_clock_ui()
+
+func _process(delta: float) -> void:
+	game_minutes += delta * GAME_MINUTES_PER_SECOND
+	if game_minutes >= 1440.0:
+		game_minutes -= 1440.0
+		game_day += 1
+	update_clock_ui()
+	apply_schedule(false)
+	autosave_elapsed += delta
+	if autosave_elapsed >= 20.0:
+		autosave_elapsed = 0.0
+		save_game()
 
 func _physics_process(_delta: float) -> void:
 	player.input_vector = joystick.value
 	var data: Dictionary = MAPS[scene_id]
 	var close := (data.portal as Rect2).grow(28).has_point(player.position)
-	var near_shenyan := scene_id == "ground" and is_instance_valid(shenyan) and player.position.distance_to(shenyan.position) < 92.0
+	var near_shenyan := scene_id == shenyan.home_scene and is_instance_valid(shenyan) and player.position.distance_to(shenyan.position) < 92.0
 	interaction_mode = "portal" if close else ("family" if near_shenyan else "")
 	action_button.visible = not interaction_mode.is_empty() and not interaction_running
 	if interaction_mode == "portal":
@@ -92,6 +117,11 @@ func _physics_process(_delta: float) -> void:
 func build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
+	daylight_overlay = ColorRect.new()
+	daylight_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	daylight_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	daylight_overlay.color = Color(0.08, 0.12, 0.28, 0.0)
+	layer.add_child(daylight_overlay)
 	joystick = Joystick.new()
 	joystick.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	joystick.position = Vector2(28, -168)
@@ -111,6 +141,10 @@ func build_ui() -> void:
 		label.text = text
 		label.add_theme_font_size_override("font_size", 18)
 		hud.add_child(label)
+		if day_label == null:
+			day_label = label
+		elif time_label == null:
+			time_label = label
 	layer.add_child(hud)
 	wardrobe_button = Button.new()
 	wardrobe_button.text = "衣柜：日常服"
@@ -242,6 +276,7 @@ func toggle_outfit() -> void:
 			"sleep": "res://assets/actions/shenyan_sleep.png"
 		})
 		wardrobe_button.text = "衣柜：日常服"
+	save_game()
 
 func load_scene(id: String, spawn: Vector2) -> void:
 	scene_id = id
@@ -294,3 +329,116 @@ func add_solid(rect: Rect2) -> void:
 func change_through_portal() -> void:
 	var data: Dictionary = MAPS[scene_id]
 	load_scene(data.to, data.to_spawn)
+	save_game()
+
+func current_period() -> int:
+	var hour := int(game_minutes) / 60
+	if hour < 6:
+		return 0
+	if hour < 9:
+		return 1
+	if hour < 12:
+		return 2
+	if hour < 17:
+		return 3
+	if hour < 22:
+		return 4
+	return 5
+
+func apply_schedule(force: bool) -> void:
+	var period := current_period()
+	if not force and period == schedule_period:
+		return
+	schedule_period = period
+	var shenyan_plan: Array = [
+		["upstairs", Vector2(245, 250), "sleep", 30.0],
+		["upstairs", Vector2(720, 690), "rest", 95.0],
+		["ground", Vector2(1120, 500), "eat", 110.0],
+		["yard", Vector2(780, 470), "tool", 250.0],
+		["ground", Vector2(700, 560), "sit", 180.0],
+		["upstairs", Vector2(300, 270), "sleep", 45.0]
+	][period]
+	shenyan.set_routine(shenyan_plan[0], shenyan_plan[1], shenyan_plan[2], shenyan_plan[3])
+	var cat: HomeActor = actors[1]
+	var cat_plan: Array = [
+		["ground", Vector2(950, 740), "sleep", 45.0],
+		["ground", Vector2(940, 700), "happy", 150.0],
+		["yard", Vector2(430, 650), "sniff", 210.0],
+		["ground", Vector2(920, 700), "sit", 190.0],
+		["ground", Vector2(760, 570), "happy", 180.0],
+		["ground", Vector2(950, 740), "sleep", 40.0]
+	][period]
+	cat.set_routine(cat_plan[0], cat_plan[1], cat_plan[2], cat_plan[3])
+	var dog: HomeActor = actors[2]
+	var dog_plan: Array = [
+		["yard", Vector2(1360, 735), "sleep", 55.0],
+		["yard", Vector2(1110, 650), "happy", 210.0],
+		["yard", Vector2(800, 520), "sniff", 300.0],
+		["yard", Vector2(900, 560), "happy", 280.0],
+		["yard", Vector2(1180, 680), "sit", 180.0],
+		["yard", Vector2(1360, 735), "sleep", 55.0]
+	][period]
+	dog.set_routine(dog_plan[0], dog_plan[1], dog_plan[2], dog_plan[3])
+	for actor in actors:
+		actor.visible = actor.home_scene == scene_id
+		actor.set_physics_process(actor.visible)
+
+func update_clock_ui() -> void:
+	if day_label == null or time_label == null:
+		return
+	var hour := int(game_minutes) / 60
+	var minute := int(game_minutes) % 60
+	day_label.text = "春 %d日" % game_day
+	time_label.text = "%s %02d:%02d" % ["☾" if hour < 6 or hour >= 19 else "☀", hour, minute]
+	var darkness := 0.0
+	if hour >= 20 or hour < 5:
+		darkness = 0.38
+	elif hour >= 18:
+		darkness = float(hour - 18) * 0.12
+	elif hour < 7:
+		darkness = float(7 - hour) * 0.12
+	daylight_overlay.color = Color(0.08, 0.12, 0.28, darkness)
+
+func save_game() -> void:
+	if player == null or loading_save:
+		return
+	var data := {
+		"day": game_day,
+		"minutes": game_minutes,
+		"scene": scene_id,
+		"outfit": outfit_mode,
+		"player_position": [player.position.x, player.position.y]
+	}
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file != null:
+		file.store_string(JSON.stringify(data))
+
+func load_game() -> Dictionary:
+	if not FileAccess.file_exists(SAVE_PATH):
+		return {}
+	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if file == null:
+		return {}
+	var parsed = JSON.parse_string(file.get_as_text())
+	if parsed is not Dictionary:
+		return {}
+	var data: Dictionary = parsed
+	game_day = maxi(1, int(data.get("day", 1)))
+	game_minutes = clampf(float(data.get("minutes", 480.0)), 0.0, 1439.0)
+	if String(data.get("outfit", "daily")) == "pajamas":
+		loading_save = true
+		toggle_outfit()
+		loading_save = false
+	return data
+
+func vector_from_save(value: Variant, fallback: Vector2) -> Vector2:
+	if value is Array and value.size() >= 2:
+		return Vector2(float(value[0]), float(value[1]))
+	return fallback
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		save_game()
+		get_tree().quit()
+	elif what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		save_game()

@@ -13,6 +13,7 @@ var action_time := 0.0
 var current_action := ""
 var facing := "down"
 var available_actions: Array[String] = []
+var preferred_action := ""
 
 func setup(name_value: String, scene_value: String, position_value: Vector2, texture_path: String, display_scale: float, speed_value: float, radius_value: float, action_textures: Dictionary = {}) -> void:
 	actor_name = name_value
@@ -73,6 +74,18 @@ func build_sprite(texture_path: String, display_scale: float, action_textures: D
 func apply_appearance(walk_path: String, action_textures: Dictionary) -> void:
 	build_sprite(walk_path, sprite.scale.x, action_textures)
 
+func set_routine(scene_value: String, position_value: Vector2, action_value: String, radius_value: float) -> void:
+	home_scene = scene_value
+	home_position = position_value
+	roam_radius = radius_value
+	preferred_action = action_value
+	if position.distance_to(home_position) > maxf(320.0, roam_radius * 2.5):
+		position = home_position
+	destination = home_position + Vector2(randf_range(-roam_radius, roam_radius), randf_range(-roam_radius * 0.45, roam_radius * 0.45))
+	wait_time = randf_range(0.3, 1.2)
+	action_time = 0.0
+	current_action = ""
+
 func _physics_process(delta: float) -> void:
 	if not visible:
 		velocity = Vector2.ZERO
@@ -108,7 +121,7 @@ func _physics_process(delta: float) -> void:
 		sprite.frame = 0
 
 func start_random_action() -> void:
-	current_action = available_actions.pick_random()
+	current_action = preferred_action if not preferred_action.is_empty() and available_actions.has(preferred_action) and randf() < 0.72 else available_actions.pick_random()
 	action_time = randf_range(2.4, 5.8)
 	var animation := current_action + "_" + facing
 	if sprite.sprite_frames.has_animation(animation):
