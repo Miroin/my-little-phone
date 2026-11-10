@@ -75,15 +75,25 @@ func build_ui() -> void:
 func create_family() -> void:
 	var shenyan: HomeActor = Actor.new()
 	add_child(shenyan)
-	shenyan.setup("沈砚", "ground", Vector2(620, 520), "res://assets/sprites/shenyan.png", 0.22, 82.0, 175.0)
+	shenyan.setup("沈砚", "ground", Vector2(620, 520), "res://assets/sprites/shenyan.png", 0.22, 82.0, 175.0, {
+		"sit": "res://assets/actions/shenyan_sit.png", "rest": "res://assets/actions/shenyan_rest.png",
+		"tool": "res://assets/actions/shenyan_tool.png", "eat": "res://assets/actions/shenyan_eat.png",
+		"sleep": "res://assets/actions/shenyan_sleep.png"
+	})
 	actors.append(shenyan)
 	var cat: HomeActor = Actor.new()
 	add_child(cat)
-	cat.setup("阿比", "ground", Vector2(900, 610), "res://assets/sprites/cat.png", 0.18, 105.0, 210.0)
+	cat.setup("阿比", "ground", Vector2(900, 610), "res://assets/sprites/cat.png", 0.18, 105.0, 210.0, {
+		"sit": "res://assets/actions/cat_sit.png", "sleep": "res://assets/actions/cat_sleep.png",
+		"sniff": "res://assets/actions/cat_sniff.png", "happy": "res://assets/actions/cat_happy.png"
+	})
 	actors.append(cat)
 	var dog: HomeActor = Actor.new()
 	add_child(dog)
-	dog.setup("伯恩山", "yard", Vector2(940, 520), "res://assets/sprites/dog.png", 0.20, 90.0, 250.0)
+	dog.setup("伯恩山", "yard", Vector2(940, 520), "res://assets/sprites/dog.png", 0.20, 90.0, 250.0, {
+		"sit": "res://assets/actions/dog_sit.png", "sleep": "res://assets/actions/dog_sleep.png",
+		"sniff": "res://assets/actions/dog_sniff.png", "happy": "res://assets/actions/dog_happy.png"
+	})
 	actors.append(dog)
 
 func load_scene(id: String, spawn: Vector2) -> void:
