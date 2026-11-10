@@ -34,4 +34,4 @@ services:
       - key: MLP_VAPID_PATH
         value: /data/vapid.json
       - key: VAPID_SUBJECT
-        value: mailto:owner@example.com
+        sync: false

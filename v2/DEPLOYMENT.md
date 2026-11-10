@@ -9,7 +9,7 @@
 - `MINIMAX_VOICE_ID`
 - `SCHEDULER_TOKEN`
 - `MLP_ACCESS_TOKEN`（保护聊天、记忆、相册和付费模型接口的个人访问口令）
-- `VAPID_SUBJECT`（通知发送者邮箱）
+- `VAPID_SUBJECT`（通知发送者邮箱，格式为 `mailto:你的邮箱`）
 
 SQLite 与音频都写入 `/data`，重新部署不会丢失。正式迁移前仍应下载一份 v2 完整备份。
 
