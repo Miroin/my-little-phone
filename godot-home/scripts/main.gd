@@ -16,6 +16,12 @@ var joystick
 var action_button: Button
 var scene_label: Label
 var actors: Array[HomeActor] = []
+var shenyan: HomeActor
+var pair_sprite: AnimatedSprite2D
+var interaction_mode := ""
+var interaction_index := 0
+var interaction_running := false
+const INTERACTIONS: Array[String] = ["hug", "kiss", "cuddle", "hold_hands"]
 
 func _ready() -> void:
 	map_sprite = Sprite2D.new()
@@ -30,6 +36,7 @@ func _ready() -> void:
 	camera.position_smoothing_speed = 6.0
 	camera.zoom = Vector2(1.12, 1.12)
 	player.add_child(camera)
+	build_pair_sprite()
 	create_family()
 	build_ui()
 	load_scene("ground", MAPS.ground.spawn)
@@ -38,11 +45,15 @@ func _physics_process(_delta: float) -> void:
 	player.input_vector = joystick.value
 	var data: Dictionary = MAPS[scene_id]
 	var close := (data.portal as Rect2).grow(28).has_point(player.position)
-	action_button.visible = close
-	if close:
+	var near_shenyan := scene_id == "ground" and is_instance_valid(shenyan) and player.position.distance_to(shenyan.position) < 92.0
+	interaction_mode = "portal" if close else ("family" if near_shenyan else "")
+	action_button.visible = not interaction_mode.is_empty() and not interaction_running
+	if interaction_mode == "portal":
 		action_button.text = data.label
-	if close and Input.is_action_just_pressed("interact"):
-		change_through_portal()
+	elif interaction_mode == "family":
+		action_button.text = "互动"
+	if not interaction_mode.is_empty() and Input.is_action_just_pressed("interact"):
+		handle_action_button()
 
 func build_ui() -> void:
 	var layer := CanvasLayer.new()
@@ -56,7 +67,7 @@ func build_ui() -> void:
 	action_button.custom_minimum_size = Vector2(86, 86)
 	action_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	action_button.position = Vector2(-118, -118)
-	action_button.pressed.connect(change_through_portal)
+	action_button.pressed.connect(handle_action_button)
 	layer.add_child(action_button)
 	var hud := HBoxContainer.new()
 	hud.set_anchors_preset(Control.PRESET_TOP_RIGHT)
@@ -73,7 +84,7 @@ func build_ui() -> void:
 	layer.add_child(scene_label)
 
 func create_family() -> void:
-	var shenyan: HomeActor = Actor.new()
+	shenyan = Actor.new()
 	add_child(shenyan)
 	shenyan.setup("沈砚", "ground", Vector2(620, 520), "res://assets/sprites/shenyan.png", 0.22, 82.0, 175.0, {
 		"sit": "res://assets/actions/shenyan_sit.png", "rest": "res://assets/actions/shenyan_rest.png",
@@ -95,6 +106,69 @@ func create_family() -> void:
 		"sniff": "res://assets/actions/dog_sniff.png", "happy": "res://assets/actions/dog_happy.png"
 	})
 	actors.append(dog)
+
+func build_pair_sprite() -> void:
+	var frames := SpriteFrames.new()
+	frames.remove_animation("default")
+	add_pair_sheet(frames, "res://assets/interactions/hug.png", "hug")
+	add_pair_sheet(frames, "res://assets/interactions/kiss.png", "kiss")
+	add_pair_sheet(frames, "res://assets/interactions/cuddle_sit.png", "cuddle")
+	add_pair_sheet(frames, "res://assets/interactions/hold_hands.png", "hold_hands")
+	pair_sprite = AnimatedSprite2D.new()
+	pair_sprite.sprite_frames = frames
+	pair_sprite.scale = Vector2(0.22, 0.22)
+	pair_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	pair_sprite.visible = false
+	add_child(pair_sprite)
+
+func add_pair_sheet(frames: SpriteFrames, texture_path: String, prefix: String) -> void:
+	var texture: Texture2D = load(texture_path)
+	var cell := Vector2i(texture.get_width() / 4, texture.get_height() / 4)
+	for row in 4:
+		var direction: String = ["down", "left", "right", "up"][row]
+		var animation := prefix + "_" + direction
+		frames.add_animation(animation)
+		frames.set_animation_speed(animation, 4.5)
+		frames.set_animation_loop(animation, false)
+		for column in 4:
+			var atlas := AtlasTexture.new()
+			atlas.atlas = texture
+			atlas.region = Rect2i(column * cell.x, row * cell.y, cell.x, cell.y)
+			frames.add_frame(animation, atlas)
+
+func handle_action_button() -> void:
+	if interaction_running:
+		return
+	if interaction_mode == "portal":
+		change_through_portal()
+	elif interaction_mode == "family":
+		play_family_interaction()
+
+func play_family_interaction() -> void:
+	interaction_running = true
+	action_button.visible = false
+	var action := INTERACTIONS[interaction_index % INTERACTIONS.size()]
+	interaction_index += 1
+	var direction := player.direction_name(player.facing)
+	var animation := action + "_" + direction
+	player.action_locked = true
+	player.velocity = Vector2.ZERO
+	shenyan.set_physics_process(false)
+	shenyan.velocity = Vector2.ZERO
+	pair_sprite.position = (player.position + shenyan.position) * 0.5 + Vector2(0, -32)
+	player.visible = false
+	shenyan.visible = false
+	pair_sprite.visible = true
+	pair_sprite.play(animation)
+	await get_tree().create_timer(3.0).timeout
+	pair_sprite.visible = false
+	player.visible = true
+	shenyan.visible = true
+	player.position = pair_sprite.position + Vector2(-22, 32)
+	shenyan.position = pair_sprite.position + Vector2(22, 32)
+	player.action_locked = false
+	shenyan.set_physics_process(true)
+	interaction_running = false
 
 func load_scene(id: String, spawn: Vector2) -> void:
 	scene_id = id
