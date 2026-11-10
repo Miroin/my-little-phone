@@ -8,9 +8,38 @@ const MAPS := {
 	"upstairs": {"texture": "res://assets/maps/upstairs.png", "spawn": Vector2(395,560), "solids": [Rect2(530,500,470,285),Rect2(330,335,145,275),Rect2(1030,380,330,225)], "portal": Rect2(340,420,130,190), "to": "ground", "to_spawn": Vector2(420,610), "label": "下楼"},
 	"yard": {"texture": "res://assets/maps/yard.png", "spawn": Vector2(770,880), "solids": [], "portal": Rect2(650,25,250,130), "to": "ground", "to_spawn": Vector2(770,820), "label": "进屋"}
 }
+const FURNITURE := {
+	"ground": [
+		{"item":"sofa", "position":Vector2(610,350), "collision":true},
+		{"item":"armchair", "position":Vector2(835,350), "collision":true},
+		{"item":"dining_table", "position":Vector2(675,610), "collision":true},
+		{"item":"kitchen_stove", "position":Vector2(1100,365), "collision":true},
+		{"item":"kitchen_sink", "position":Vector2(1260,365), "collision":true},
+		{"item":"fridge", "position":Vector2(1160,650), "collision":true},
+		{"item":"bookcase", "position":Vector2(215,655), "collision":true},
+		{"item":"cat_bed", "position":Vector2(950,740), "collision":false},
+		{"item":"pet_bowls", "position":Vector2(990,790), "collision":false}
+	],
+	"upstairs": [
+		{"item":"double_bed", "position":Vector2(245,250), "collision":true},
+		{"item":"single_bed", "position":Vector2(1190,245), "collision":true},
+		{"item":"wardrobe", "position":Vector2(245,660), "collision":true},
+		{"item":"nightstand", "position":Vector2(475,665), "collision":true},
+		{"item":"desk", "position":Vector2(720,720), "collision":true},
+		{"item":"bookcase", "position":Vector2(1260,690), "collision":true},
+		{"item":"bathtub", "position":Vector2(1170,435), "collision":true},
+		{"item":"bath_sink", "position":Vector2(1300,500), "collision":true},
+		{"item":"toilet", "position":Vector2(1125,525), "collision":true}
+	],
+	"yard": [
+		{"item":"dog_house", "position":Vector2(1220,260), "collision":true},
+		{"item":"pet_bowls", "position":Vector2(1110,360), "collision":false}
+	]
+}
 var scene_id := "ground"
 var map_sprite: Sprite2D
 var collision_root: Node2D
+var furniture_root: Node2D
 var player: HomePlayer
 var joystick
 var action_button: Button
@@ -28,7 +57,10 @@ const INTERACTIONS: Array[String] = ["hug", "kiss", "cuddle", "hold_hands"]
 func _ready() -> void:
 	map_sprite = Sprite2D.new()
 	map_sprite.centered = false
+	map_sprite.z_index = -10
 	add_child(map_sprite)
+	furniture_root = Node2D.new()
+	add_child(furniture_root)
 	collision_root = Node2D.new()
 	add_child(collision_root)
 	player = Player.new()
@@ -217,14 +249,31 @@ func load_scene(id: String, spawn: Vector2) -> void:
 	map_sprite.texture = load(data.texture)
 	for child in collision_root.get_children():
 		child.queue_free()
+	for child in furniture_root.get_children():
+		child.queue_free()
 	add_boundary(Rect2(55,55,1425,880))
 	for rect in data.solids:
 		add_solid(rect)
+	build_furniture(id)
 	player.position = spawn
 	for actor in actors:
 		actor.visible = actor.home_scene == id
 		actor.set_physics_process(actor.visible)
 	scene_label.text = {"ground":"一楼", "upstairs":"二楼", "yard":"庭院"}[id]
+
+func build_furniture(id: String) -> void:
+	for entry_value in FURNITURE[id]:
+		var entry: Dictionary = entry_value
+		var sprite_node := Sprite2D.new()
+		sprite_node.texture = load("res://assets/furniture/items/" + String(entry.item) + ".png")
+		sprite_node.position = entry.position
+		sprite_node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		furniture_root.add_child(sprite_node)
+		if bool(entry.collision):
+			var texture_size := sprite_node.texture.get_size()
+			var collision_size := Vector2(texture_size.x * 0.68, maxf(24.0, texture_size.y * 0.28))
+			var collision_rect := Rect2(sprite_node.position + Vector2(-collision_size.x * 0.5, texture_size.y * 0.18), collision_size)
+			add_solid(collision_rect)
 
 func add_boundary(rect: Rect2) -> void:
 	add_solid(Rect2(rect.position - Vector2(40,40), Vector2(rect.size.x+80,40)))
