@@ -4,6 +4,7 @@ extends CharacterBody2D
 @export var speed := 230.0
 var input_vector := Vector2.ZERO
 var facing := Vector2.DOWN
+var sprite: AnimatedSprite2D
 
 func _ready() -> void:
 	collision_layer = 2
@@ -15,7 +16,30 @@ func _ready() -> void:
 	shape.shape = capsule
 	shape.position = Vector2(0, -7)
 	add_child(shape)
-	queue_redraw()
+	build_sprite()
+
+func build_sprite() -> void:
+	var texture: Texture2D = load("res://assets/sprites/chenyu.png")
+	var cell := Vector2i(texture.get_width() / 4, texture.get_height() / 4)
+	var frames := SpriteFrames.new()
+	frames.remove_animation("default")
+	for row in 4:
+		var animation: String = ["down", "left", "right", "up"][row]
+		frames.add_animation(animation)
+		frames.set_animation_speed(animation, 8.0)
+		frames.set_animation_loop(animation, true)
+		for column in 4:
+			var atlas := AtlasTexture.new()
+			atlas.atlas = texture
+			atlas.region = Rect2i(column * cell.x, row * cell.y, cell.x, cell.y)
+			frames.add_frame(animation, atlas)
+	sprite = AnimatedSprite2D.new()
+	sprite.sprite_frames = frames
+	sprite.animation = "down"
+	sprite.scale = Vector2(0.22, 0.22)
+	sprite.position = Vector2(0, -35)
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	add_child(sprite)
 
 func _physics_process(_delta: float) -> void:
 	var keyboard := Input.get_vector("move_left", "move_right", "move_up", "move_down")
@@ -23,19 +47,16 @@ func _physics_process(_delta: float) -> void:
 	velocity = direction.normalized() * speed if direction.length() > 0.05 else Vector2.ZERO
 	if velocity.length() > 0.0:
 		facing = velocity.normalized()
+		var animation := "down"
+		if abs(facing.x) > abs(facing.y):
+			animation = "right" if facing.x > 0 else "left"
+		else:
+			animation = "down" if facing.y > 0 else "up"
+		if sprite.animation != animation:
+			sprite.play(animation)
+		elif not sprite.is_playing():
+			sprite.play()
+	else:
+		sprite.pause()
+		sprite.frame = 0
 	move_and_slide()
-	queue_redraw()
-
-func _draw() -> void:
-	# 临时占位角色；收到正式精灵图后替换为 AnimatedSprite2D。
-	draw_oval(Vector2(0, 4), Vector2(13, 6), Color(0.15, 0.08, 0.04, 0.35))
-	draw_rect(Rect2(-8, -30, 16, 29), Color("fff1d8"), true)
-	draw_rect(Rect2(-8, -30, 16, 29), Color("543825"), false, 2.0)
-	draw_rect(Rect2(-8, -42, 16, 13), Color("6d4937"), true)
-
-func draw_oval(center: Vector2, radius: Vector2, color: Color) -> void:
-	var points := PackedVector2Array()
-	for i in 24:
-		var angle := TAU * float(i) / 24.0
-		points.append(center + Vector2(cos(angle) * radius.x, sin(angle) * radius.y))
-	draw_colored_polygon(points, color)
