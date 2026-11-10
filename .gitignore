@@ -3,3 +3,5 @@ __pycache__/
 v2/backend/data/
 v2/backend/pytest-cache-files-*/
 v2/frontend/dist/
+godot-home/.godot/
+godot-home/export/
