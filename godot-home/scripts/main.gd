@@ -32,8 +32,23 @@ const FURNITURE := {
 		{"item":"toilet", "position":Vector2(1125,525), "collision":true}
 	],
 	"yard": [
-		{"item":"dog_house", "position":Vector2(1220,260), "collision":true},
-		{"item":"pet_bowls", "position":Vector2(1110,360), "collision":false}
+		{"item":"yard_tree", "position":Vector2(285,245), "collision":true},
+		{"item":"yard_fruit_tree", "position":Vector2(1215,245), "collision":true},
+		{"item":"yard_bush", "position":Vector2(420,690), "collision":true},
+		{"item":"yard_berry_bush", "position":Vector2(1110,690), "collision":true},
+		{"item":"yard_bench", "position":Vector2(145,500), "collision":true},
+		{"item":"yard_swing", "position":Vector2(1260,500), "collision":true},
+		{"item":"yard_mailbox", "position":Vector2(625,875), "collision":true},
+		{"item":"yard_lamp", "position":Vector2(905,875), "collision":true},
+		{"item":"yard_flower_box", "position":Vector2(1035,895), "collision":true},
+		{"item":"yard_red_flowers", "position":Vector2(500,300), "collision":false},
+		{"item":"yard_pink_flowers", "position":Vector2(1000,300), "collision":false},
+		{"item":"yard_white_flowers", "position":Vector2(500,735), "collision":false},
+		{"item":"yard_yellow_flowers", "position":Vector2(1010,735), "collision":false},
+		{"item":"yard_cat_post", "position":Vector2(300,745), "collision":true},
+		{"item":"yard_dog_ball", "position":Vector2(1080,775), "collision":false},
+		{"item":"dog_house", "position":Vector2(1360,735), "collision":true},
+		{"item":"pet_bowls", "position":Vector2(1250,870), "collision":false}
 	]
 }
 var scene_id := "ground"
