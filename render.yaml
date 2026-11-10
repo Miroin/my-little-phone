@@ -6,10 +6,7 @@ services:
     dockerContext: ./v2/backend
     healthCheckPath: /health
     autoDeploy: true
-    disk:
-      name: little-phone-data
-      mountPath: /data
-      sizeGB: 1
+    plan: free
     envVars:
       - key: MLP_ALLOWED_ORIGINS
         value: https://miroin.github.io
@@ -35,3 +32,9 @@ services:
         value: /data/vapid.json
       - key: VAPID_SUBJECT
         sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: MLP_SNAPSHOT_BUCKET
+        value: mlp-backups

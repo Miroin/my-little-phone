@@ -13,6 +13,16 @@
 
 SQLite 与音频都写入 `/data`，重新部署不会丢失。正式迁移前仍应下载一份 v2 完整备份。
 
+### 无银行卡的免费部署
+
+免费部署使用 Render Free Web Service 和 Supabase Storage 云快照。还需要在 Render 设置：
+
+- `SUPABASE_URL`：Supabase 项目地址。
+- `SUPABASE_SERVICE_ROLE_KEY`：仅保存在 Render 后台的服务端密钥，不能填进前端或公开仓库。
+- `MLP_SNAPSHOT_BUCKET=mlp-backups`。
+
+GitHub 调度器每五分钟调用 `/api/cloud-backup/sync`，保存数据库、语音和相册。Render 免费实例重新启动时会先从最新快照恢复。两次快照之间最多可能丢失约五分钟的新数据，因此仍应定期从小手叽下载完整备份。
+
 Render 蓝图会自动生成 `MLP_ACCESS_TOKEN`。部署完成后在 Render 环境变量中复制它，再填入小手叽“设置 → 模型与接口 → 个人访问口令”。不要把它写进仓库、截图或分享给其他人。
 
 Web Push 的 VAPID 密钥会在首次启动时自动生成到 `/data/vapid.json`，无需手工粘贴，并会随持久磁盘保留。已有自备密钥时仍可同时设置 `VAPID_PUBLIC_KEY` 和 `VAPID_PRIVATE_KEY` 覆盖自动密钥。

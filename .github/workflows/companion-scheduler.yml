@@ -34,3 +34,6 @@ jobs:
           curl --fail-with-body --silent --show-error --retry 2 --max-time 90 \
             -X POST -H "X-Scheduler-Token: ${SCHEDULER_TOKEN}" \
             "${base}/api/notifications/dispatch"
+          curl --fail-with-body --silent --show-error --retry 2 --max-time 180 \
+            -X POST -H "X-Scheduler-Token: ${SCHEDULER_TOKEN}" \
+            "${base}/api/cloud-backup/sync"

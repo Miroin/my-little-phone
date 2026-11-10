@@ -8,6 +8,7 @@ import os
 import re
 import sqlite3
 import uuid
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -28,10 +29,17 @@ from .notifications import build_router as build_notification_router, install_no
 from .profiles import build_router as build_profile_router, install_profile_schema, profile_prompt
 from .life import build_router as build_life_router, install_life_schema
 from .worldbook import build_router as build_worldbook_router, install_worldbook_schema, worldbook_prompt
+from .cloud_snapshot import configured as cloud_snapshot_configured
+from .cloud_snapshot import restore_if_available, upload as upload_cloud_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("MLP_DATABASE_PATH", ROOT / "data" / "little-phone.db"))
+AUDIO_PATH = Path(os.getenv("MLP_AUDIO_PATH", ROOT / "data" / "audio"))
+MEDIA_PATH = Path(os.getenv("MLP_MEDIA_PATH", ROOT / "data" / "media"))
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+AUDIO_PATH.mkdir(parents=True, exist_ok=True)
+MEDIA_PATH.mkdir(parents=True, exist_ok=True)
+restore_if_available(DB_PATH, AUDIO_PATH, MEDIA_PATH)
 
 app = FastAPI(title="小手叽 v2 API", version="0.2.0")
 app.add_middleware(
@@ -381,6 +389,14 @@ def health() -> dict:
     return {"ok": True, "database": DB_PATH.name, "modelConfigured": bool(os.getenv("DEEPSEEK_API_KEY")), "memorySchema": 2, "memoryCount": memory_count}
 
 
+@app.post("/api/cloud-backup/sync")
+def sync_cloud_backup() -> dict:
+    try:
+        return upload_cloud_snapshot(DB_PATH, AUDIO_PATH, MEDIA_PATH)
+    except (httpx.HTTPError, OSError, sqlite3.Error, zipfile.BadZipFile) as exc:
+        raise HTTPException(status_code=502, detail="云端数据快照同步失败") from exc
+
+
 @app.get("/api/session")
 def private_session() -> dict:
     return {"ok": True, "authenticated": True}
@@ -394,6 +410,7 @@ def service_readiness() -> dict:
         "minimax": bool(os.getenv("MINIMAX_API_KEY", "").strip() and os.getenv("MINIMAX_VOICE_ID", "").strip()),
         "scheduler": bool(os.getenv("SCHEDULER_TOKEN", "").strip()),
         "accessProtection": bool(os.getenv("MLP_ACCESS_TOKEN", "").strip()),
+        "cloudBackup": cloud_snapshot_configured(),
         "push": False,
     }
     try:
