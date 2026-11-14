@@ -10,6 +10,9 @@ from pathlib import Path
 import httpx
 
 
+FREE_STORAGE_FILE_LIMIT_MB = 50
+
+
 def configured() -> bool:
     return bool(os.getenv("SUPABASE_URL", "").strip() and os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip())
 
@@ -24,6 +27,15 @@ def _settings() -> tuple[str, str, str, str]:
 
 def _headers(key: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {key}", "apikey": key}
+
+
+def _max_archive_bytes() -> int:
+    try:
+        requested_mb = int(os.getenv("MLP_BACKUP_MAX_MB", "45"))
+    except ValueError:
+        requested_mb = 45
+    safe_mb = max(1, min(requested_mb, FREE_STORAGE_FILE_LIMIT_MB))
+    return safe_mb * 1024 * 1024
 
 
 def build_archive(database: Path, audio_dir: Path, media_dir: Path) -> bytes:
@@ -85,16 +97,19 @@ def upload(database: Path, audio_dir: Path, media_dir: Path) -> dict[str, int | 
         return {"configured": False, "uploaded": 0}
     base, key, bucket, name = _settings()
     headers = _headers(key)
+    max_archive_bytes = _max_archive_bytes()
     bucket_response = httpx.get(f"{base}/storage/v1/bucket/{bucket}", headers=headers, timeout=30.0)
     if bucket_response.status_code in (400, 404):
         bucket_response = httpx.post(
             f"{base}/storage/v1/bucket",
             headers={**headers, "Content-Type": "application/json"},
-            json={"id": bucket, "name": bucket, "public": False, "file_size_limit": 536870912},
+            json={"id": bucket, "name": bucket, "public": False, "file_size_limit": max_archive_bytes},
             timeout=30.0,
         )
     bucket_response.raise_for_status()
     raw = build_archive(database, audio_dir, media_dir)
+    if len(raw) > max_archive_bytes:
+        raise OSError(f"cloud snapshot exceeds the configured {max_archive_bytes}-byte limit")
     response = httpx.post(
         f"{base}/storage/v1/object/{bucket}/{name}",
         headers={**headers, "Content-Type": "application/zip", "x-upsert": "true"},

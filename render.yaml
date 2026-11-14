@@ -21,7 +21,7 @@ services:
       - key: MLP_ACCESS_TOKEN
         generateValue: true
       - key: MLP_BACKUP_MAX_MB
-        value: 512
+        value: 45
       - key: MLP_DATABASE_PATH
         value: /data/little-phone.db
       - key: MLP_AUDIO_PATH

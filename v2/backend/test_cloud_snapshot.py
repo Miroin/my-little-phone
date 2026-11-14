@@ -2,7 +2,7 @@ import sqlite3
 import shutil
 from pathlib import Path
 
-from app.cloud_snapshot import build_archive, extract_archive
+from app.cloud_snapshot import _max_archive_bytes, build_archive, extract_archive
 
 
 test_root = Path(__file__).parent / "data"
@@ -13,6 +13,7 @@ for folder in (source, restored):
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
 try:
+    assert _max_archive_bytes() == 45 * 1024 * 1024
     database = source / "little-phone.db"
     audio = source / "audio"
     media = source / "media"
