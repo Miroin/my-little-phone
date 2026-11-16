@@ -393,8 +393,14 @@ def health() -> dict:
 def sync_cloud_backup() -> dict:
     try:
         return upload_cloud_snapshot(DB_PATH, AUDIO_PATH, MEDIA_PATH)
+    except httpx.HTTPStatusError as exc:
+        upstream = exc.response.text.strip().replace("\n", " ")[:300]
+        detail = f"Supabase 返回 {exc.response.status_code}"
+        if upstream:
+            detail = f"{detail}: {upstream}"
+        raise HTTPException(status_code=502, detail=detail) from exc
     except (httpx.HTTPError, OSError, sqlite3.Error, zipfile.BadZipFile) as exc:
-        raise HTTPException(status_code=502, detail="云端数据快照同步失败") from exc
+        raise HTTPException(status_code=502, detail=f"云端数据快照同步失败: {type(exc).__name__}") from exc
 
 
 @app.get("/api/session")
