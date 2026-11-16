@@ -103,7 +103,7 @@ def upload(database: Path, audio_dir: Path, media_dir: Path) -> dict[str, int | 
         bucket_response = httpx.post(
             f"{base}/storage/v1/bucket",
             headers={**headers, "Content-Type": "application/json"},
-            json={"id": bucket, "name": bucket, "public": False, "file_size_limit": max_archive_bytes},
+            json={"id": bucket, "name": bucket, "public": False},
             timeout=30.0,
         )
     bucket_response.raise_for_status()
