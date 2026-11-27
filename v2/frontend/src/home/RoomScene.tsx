@@ -1,0 +1,10 @@
+import type {ReactNode} from 'react';
+import {roomMeta,type HomeModule,type HomeState,type RoomId} from './model';
+import type {HomeMember,HomePet,MemberInteraction} from './model';
+import {FamilyLayer} from './FamilyLayer';
+
+export interface RoomProps{state:HomeState;onPatch:(patch:Partial<HomeState['roomStates'][RoomId]>,message:string)=>void;onOpen:(page:HomeModule)=>void;onLifeAction:(area:'kitchen'|'garden'|'wardrobe',action:string,payload?:string)=>void}
+export function Hotspot({label,detail,onClick,className='' }:{label:string;detail:string;onClick:()=>void;className?:string}){return <button className={`home-hotspot ${className}`.trim()} onClick={onClick}><i>+</i><span><b>{label}</b><small>{detail}</small></span></button>}
+export function RoomScene({room,state,onBack,onSwitch,onMemberAction,onInviteMember,onPetAction,onOpen,feedback,children}:{room:RoomId;state:HomeState;onBack:()=>void;onSwitch:(room:RoomId)=>void;onMemberAction:(action:MemberInteraction)=>void;onInviteMember:()=>void;onPetAction:(id:HomePet['id'],action:string)=>void;onOpen:(page:HomeModule)=>void;feedback:{subject:string;action:string}|null;children:ReactNode}){
+  return <main className={`room-scene room-${room} environment-${state.environment.mode}`}><header className="room-heading"><button onClick={onBack}>← 房屋总览</button><div className="room-heading-copy"><small>{roomMeta[room].english}</small><h1>{roomMeta[room].name}</h1><p>{state.roomStates[room].note}</p></div><span className={state.roomStates[room].lights?'light-on':''}>{state.roomStates[room].lights?'灯光亮着':'自然光'}</span></header><section className="room-stage">{children}<FamilyLayer room={room} state={state} onMemberAction={onMemberAction} onInviteMember={onInviteMember} onPetAction={onPetAction} onChat={()=>onOpen('chat')} feedback={feedback}/></section><nav className="room-switcher" aria-label="切换房间">{state.floorPlan.filter(id=>id!==room).map(id=><button key={id} onClick={()=>onSwitch(id)}>{roomMeta[id].name}</button>)}</nav></main>;
+}

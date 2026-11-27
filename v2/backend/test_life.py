@@ -24,4 +24,11 @@ saved = client.put("/api/life/home-state", json=home_state)
 assert saved.status_code == 200 and saved.json()["state"]["pet_names"]["dog"] == "团子"
 loaded = client.get("/api/life/home-state")
 assert loaded.status_code == 200 and loaded.json()["state"]["scene"] == "yard"
+modern_state = {"schemaVersion": 2, "currentRoom": "living", "floorPlan": ["living", "kitchen", "bedroom", "study", "dressing", "balcony"], "roomStates": {"living": {"lights": True}}, "members": {"shenyan": {"room": "study"}}, "pets": {"abi": {"name": "阿比", "mood": 82}}, "theme": "moon-cream", "furniture": {"living": ["sofa"]}, "environment": {"mode": "day"}, "lifeEvents": [], "lastUpdatedAt": "2026-11-18T00:00:00Z", "legacyBackup": home_state}
+modern_saved = client.put("/api/life/home-state", json=modern_state)
+assert modern_saved.status_code == 200, modern_saved.text
+assert modern_saved.json()["state"]["schemaVersion"] == 2
+assert modern_saved.json()["state"]["pets"]["abi"]["name"] == "阿比"
+modern_loaded = client.get("/api/life/home-state").json()["state"]
+assert modern_loaded["currentRoom"] == "living" and modern_loaded["legacyBackup"]["scene"] == "yard"
 print("shared life test passed")

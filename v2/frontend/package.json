@@ -19,7 +19,7 @@
     "@vitejs/plugin-react": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "typescript": "latest",
+    "typescript": "5.9.3",
     "vite": "latest"
   },
   "devDependencies": {

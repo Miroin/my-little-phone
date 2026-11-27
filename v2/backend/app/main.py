@@ -31,6 +31,7 @@ from .life import build_router as build_life_router, install_life_schema
 from .worldbook import build_router as build_worldbook_router, install_worldbook_schema, worldbook_prompt
 from .cloud_snapshot import configured as cloud_snapshot_configured
 from .cloud_snapshot import restore_if_available, upload as upload_cloud_snapshot
+from .qqmusic import build_router as build_qqmusic_router
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("MLP_DATABASE_PATH", ROOT / "data" / "little-phone.db"))
@@ -160,6 +161,7 @@ app.include_router(build_notification_router(db, now, new_id))
 app.include_router(build_profile_router(db, now))
 app.include_router(build_life_router(db, now, new_id))
 app.include_router(build_worldbook_router(db, now, new_id))
+app.include_router(build_qqmusic_router())
 
 
 class ChatRequest(BaseModel):
@@ -418,6 +420,7 @@ def service_readiness() -> dict:
         "accessProtection": bool(os.getenv("MLP_ACCESS_TOKEN", "").strip()),
         "cloudBackup": cloud_snapshot_configured(),
         "push": False,
+        "qqmusic": bool(os.getenv("QQMUSIC_API_KEY", "").strip()),
     }
     try:
         with db() as connection:

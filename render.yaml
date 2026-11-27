@@ -16,6 +16,8 @@ services:
         sync: false
       - key: MINIMAX_VOICE_ID
         sync: false
+      - key: QQMUSIC_API_KEY
+        sync: false
       - key: SCHEDULER_TOKEN
         generateValue: true
       - key: MLP_ACCESS_TOKEN

@@ -7,9 +7,9 @@ from typing import Any, Callable, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-LifeKind = Literal["home", "music", "schedule"]
+LifeKind = Literal["home", "music", "schedule", "journal", "cinema"]
 
 
 class LifeNoteCreate(BaseModel):
@@ -18,11 +18,14 @@ class LifeNoteCreate(BaseModel):
     content: str = Field(default="", max_length=8000)
 
 
-class HomeGameState(BaseModel):
-    version: int = 1
-    scene: Literal["ground", "upstairs", "yard"] = "ground"
+class HomeState(BaseModel):
+    """Versioned HOME state. Extra fields preserve legacy saves during migration."""
+    model_config = ConfigDict(extra="allow")
+    schemaVersion: int | None = None
+    version: int | None = None
+    scene: Literal["ground", "upstairs", "yard"] | None = None
     actors: dict[str, Any] = Field(default_factory=dict)
-    pet_names: dict[str, str] = Field(default_factory=lambda: {"dog": "伯恩山", "cat": "阿比"})
+    pet_names: dict[str, str] = Field(default_factory=dict)
     furniture: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -55,11 +58,12 @@ def build_router(db_factory: Callable[[], sqlite3.Connection], now: Callable[[],
         return {"state": json.loads(row["state_json"]), "updated_at": row["updated_at"]} if row else {"state": None, "updated_at": None}
 
     @router.put("/home-state")
-    def put_home_state(body: HomeGameState) -> dict:
+    def put_home_state(body: HomeState) -> dict:
         import json
         timestamp = now()
         state = body.model_dump()
-        state["pet_names"] = {key: str(value).strip()[:24] or ("伯恩山" if key == "dog" else "阿比") for key, value in state["pet_names"].items()}
+        if state.get("pet_names"):
+            state["pet_names"] = {key: str(value).strip()[:24] or ("伯恩山" if key == "dog" else "阿比") for key, value in state["pet_names"].items()}
         with db_factory() as connection:
             install_life_schema(connection)
             connection.execute("INSERT INTO home_game_state VALUES('home',?,?) ON CONFLICT(id) DO UPDATE SET state_json=excluded.state_json,updated_at=excluded.updated_at", (json.dumps(state, ensure_ascii=False), timestamp))
