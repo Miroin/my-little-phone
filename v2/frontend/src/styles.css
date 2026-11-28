@@ -87,3 +87,27 @@ nav{padding:9px 8px calc(9px + env(safe-area-inset-bottom));background:#faf8faed
 .theme-y2k .atelier-page,.theme-gold .atelier-page{color:var(--ink)}
 @media(max-width:360px){.atelier-page{padding-left:16px;padding-right:16px}.atelier-tools{grid-template-columns:1fr}.companion-note,.archive-drawer{grid-column:auto}.atelier-samples{grid-template-columns:1fr}.theme-board{grid-template-columns:1fr}.theme-caption{min-height:105px}.theme-scene{min-height:170px}}
 header:has(.offline-banner){flex-wrap:wrap}.offline-banner{position:relative;z-index:12;display:flex;flex:0 0 calc(100% + 32px);align-items:center;justify-content:center;gap:12px;min-height:38px;margin:10px -16px -12px;padding:7px 18px;border-top:1px solid #eadfe7;background:#f4f0f7;color:#695e70;font-size:11px;line-height:1.4}.offline-banner button{flex:none;border:1px solid #cfc1d8;border-radius:999px;background:#fff;color:#68566f;padding:5px 11px;font:inherit;cursor:pointer}.offline-banner button:hover{background:#ede5f1}@media(max-width:520px){.offline-banner{justify-content:space-between;padding:7px 12px;font-size:9px}.offline-banner span{max-width:78%}}
+
+/* Mobile viewport contract: preserve proportions and keep controls clear of iPhone safe areas. */
+html,body,#root{width:100%;height:100%;min-height:100%;overflow:hidden}
+body{min-height:100vh;min-height:100dvh}
+.phone-shell{width:min(100vw,430px);max-width:100%;height:100vh;height:100dvh;min-height:100svh;max-height:100dvh;grid-template-rows:auto minmax(0,1fr) auto;overscroll-behavior:none}
+.phone-shell>*{min-width:0}
+.phone-shell>header{padding-top:max(12px,calc(8px + env(safe-area-inset-top)))}
+.phone-shell>nav{padding-bottom:max(9px,calc(7px + env(safe-area-inset-bottom)))}
+img,video,canvas{max-width:100%}
+.chat-page input,.chat-page textarea{font-size:16px}
+@media(max-width:430px){
+  header{min-height:58px;padding-left:14px;padding-right:14px}
+  .feature-page{padding-left:18px;padding-right:18px}
+  .private-chat .messages{padding-left:14px;padding-right:14px}
+  .private-chat .messages>article{max-width:86%}
+  .private-chat>form{padding:9px 10px;grid-template-columns:40px minmax(0,1fr) auto}
+  .private-chat>form input{min-height:44px}
+  .private-chat>form button{min-height:44px}
+}
+@media(max-width:360px){
+  .private-chat>form{grid-template-columns:38px minmax(0,1fr) 50px;gap:5px;padding-left:7px;padding-right:7px}
+  .private-chat>form input{padding-left:11px;padding-right:11px}
+  nav{padding-left:4px;padding-right:4px}
+}
