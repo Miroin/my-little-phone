@@ -4,7 +4,7 @@ import os
 from typing import Any, Literal
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 
@@ -23,13 +23,19 @@ class QQMusicRequest(BaseModel):
 def build_router() -> APIRouter:
     router = APIRouter(prefix="/api/qqmusic", tags=["qqmusic"])
 
+    def resolve_api_key(device_key: str | None) -> str:
+        return (device_key or os.getenv("QQMUSIC_API_KEY", "")).strip()
+
     @router.get("/status")
-    def status() -> dict[str, bool]:
-        return {"configured": bool(os.getenv("QQMUSIC_API_KEY", "").strip())}
+    def status(device_key: str | None = Header(default=None, alias="X-QQMusic-Key")) -> dict[str, bool]:
+        return {"configured": bool(resolve_api_key(device_key))}
 
     @router.post("/query")
-    async def query(body: QQMusicRequest) -> dict[str, Any]:
-        api_key = os.getenv("QQMUSIC_API_KEY", "").strip()
+    async def query(
+        body: QQMusicRequest,
+        device_key: str | None = Header(default=None, alias="X-QQMusic-Key"),
+    ) -> dict[str, Any]:
+        api_key = resolve_api_key(device_key)
         if not api_key:
             raise HTTPException(status_code=503, detail="尚未配置 QQ 音乐 API Key")
 

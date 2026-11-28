@@ -4,8 +4,10 @@ const DEFAULT_API_BASE=location.hostname.endsWith('github.io')?'https://my-littl
 let API_BASE=(localStorage.getItem('mlp_v2_api_base')||import.meta.env.VITE_API_BASE_URL||DEFAULT_API_BASE).replace(/\/$/,'');
 export const currentApiBase=()=>API_BASE;
 export const currentAccessToken=()=>localStorage.getItem('mlp_v2_access_token')||'';
+export const currentQQMusicKey=()=>localStorage.getItem('mlp_v2_qqmusic_key')||'';
 export function saveApiBase(value:string){const normalized=value.trim().replace(/\/$/,'');if(!/^https?:\/\//i.test(normalized))throw new Error('请输入完整的 http 或 https 地址');API_BASE=normalized;localStorage.setItem('mlp_v2_api_base',normalized);}
 export function saveAccessToken(value:string){localStorage.setItem('mlp_v2_access_token',value.trim());}
+export function saveQQMusicKey(value:string){const key=value.trim();if(key)localStorage.setItem('mlp_v2_qqmusic_key',key);else localStorage.removeItem('mlp_v2_qqmusic_key');}
 async function apiFetch(input:RequestInfo|URL,init:RequestInit={}):Promise<Response>{
   const headers=new Headers(init.headers||{}),token=currentAccessToken();
   if(token)headers.set('X-MLP-Access-Token',token);
@@ -26,8 +28,9 @@ export async function deleteLifeNote(id:string):Promise<void>{const response=awa
 export type QQMusicAction='search'|'daily'|'radio'|'charts'|'chart_detail'|'playlist'|'report';
 export interface QQMusicSong{songMid:string;songName:string;singerName:string;songH5Url?:string;rank?:number}
 export interface QQMusicChart{topId:number;topName:string;listenNum?:number;songList?:QQMusicSong[]}
-export async function qqMusicStatus():Promise<{configured:boolean}>{const response=await apiFetch(`${API_BASE}/api/qqmusic/status`);if(!response.ok)throw new Error('无法读取 QQ 音乐状态');return response.json();}
-export async function queryQQMusic(action:QQMusicAction,options:{keyword?:string;item_id?:number;page?:number;period?:'d'|'w'|'m'}={}):Promise<any>{const response=await apiFetch(`${API_BASE}/api/qqmusic/query`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...options})});if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'QQ 音乐连接失败');return response.json();}
+function qqMusicHeaders(contentType=false):Headers{const headers=new Headers(contentType?{'Content-Type':'application/json'}:undefined),key=currentQQMusicKey();if(key)headers.set('X-QQMusic-Key',key);return headers;}
+export async function qqMusicStatus():Promise<{configured:boolean}>{const response=await apiFetch(`${API_BASE}/api/qqmusic/status`,{headers:qqMusicHeaders()});if(!response.ok)throw new Error('无法读取 QQ 音乐状态');return response.json();}
+export async function queryQQMusic(action:QQMusicAction,options:{keyword?:string;item_id?:number;page?:number;period?:'d'|'w'|'m'}={}):Promise<any>{const response=await apiFetch(`${API_BASE}/api/qqmusic/query`,{method:'POST',headers:qqMusicHeaders(true),body:JSON.stringify({action,...options})});if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'QQ 音乐连接失败');return response.json();}
 export interface HomeGameState{[key:string]:unknown;version?:number;schemaVersion?:number;scene?:'ground'|'upstairs'|'yard';actors?:Record<string,{x:number;y:number;facing:number;scene?:'ground'|'upstairs'|'yard';state?:string;activity?:string}>;pet_names?:Record<string,string>;furniture?:Record<string,unknown>}
 export async function loadHomeState():Promise<HomeGameState|null>{const response=await apiFetch(`${API_BASE}/api/life/home-state`);if(!response.ok)throw new Error('读取小家存档失败');return (await response.json()).state;}
 export async function saveHomeState<T extends HomeGameState>(state:T):Promise<T>{const response=await apiFetch(`${API_BASE}/api/life/home-state`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});if(!response.ok)throw new Error((await response.json().catch(()=>null))?.detail||'保存小家失败');return (await response.json()).state as T;}
